@@ -22,5 +22,13 @@ package object drawables {
   implicit class Ignorable[T](val t: T) extends AnyVal {
     def ignore = ()
   }
+  implicit class CombinePartial[T, R](val partial: PartialFunction[T, R]) extends AnyVal {
+    def makeTotal(total: (T) => R): T => R = { p =>
+      if (partial.isDefinedAt(p))
+        partial(p)
+      else
+        total(p)
+    }
+  }
   val drawables = List(Circle, Ellipse)
 }
