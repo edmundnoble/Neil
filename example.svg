@@ -1,0 +1,14 @@
+<toplevel>
+        <circle
+            id="e"
+            cx="81.6"
+            cy="50"
+            r="18.4"/>
+
+
+        <circle
+            id="e"
+            cx="81.6"
+            r="18.4"/>
+
+</toplevel>
