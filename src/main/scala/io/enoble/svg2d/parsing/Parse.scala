@@ -1,4 +1,4 @@
-package io.enoble.svg2d.drawables
+package io.enoble.svg2d.parsing
 
 import com.squareup.javapoet.MethodSpec
 
@@ -42,7 +42,7 @@ object Parse {
     }
   }
 
-  def parseAll: xml.Elem => Option[Result] = traverse(parseDrawable)
+  def parseAll: xml.Elem => Option[Code] = traverse(parseDrawable)
 
-  def parseDrawable: xml.Elem => Option[Result] = (Circle orElse Ellipse) makeTotal (_ => None)
+  def parseDrawable: xml.Elem => Option[Code] = parsers.reduce(_ orElse _) makeTotal (_ => None)
 }
