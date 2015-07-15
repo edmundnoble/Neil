@@ -25,17 +25,21 @@ object Path extends JavaTokenParsers {
   trait Relative
   type Coords = (Double, Double)
 
-  def parsedDouble = floatingPointNumber ^^ (_.toDouble)
+  object Parsers extends JavaTokenParsers {
+    val parsedDouble = floatingPointNumber ^^ (_.toDouble)
 
-  def twoCoords = (floatingPointNumber <~ ",") ~ floatingPointNumber
+    val twoCoords = (parsedDouble <~ ",") ~ parsedDouble
 
-  def lineTo = "l" ~> whiteSpace ~> twoCoords
-  def moveTo = "m" ~> whiteSpace ~> twoCoords
+    val lineTo = "l" ~> whiteSpace ~> twoCoords
+
+    val moveTo = "m" ~> whiteSpace ~> twoCoords
+  }
 
   case class ClosePath() extends PathCommand
   case class MoveTo(point: Coords) extends PathCommand
   case class LineTo(point: Coords) extends PathCommand
 }
+
 
 case class Path(commands: PathCommand*) extends Code {
 
