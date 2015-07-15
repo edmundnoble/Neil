@@ -2,11 +2,12 @@ package io.enoble.svg2d.parsing
 
 import io.enoble.svg2d.parsing.Path.PathCommand
 
-import scala.xml.Elem
+import scala.util.parsing.combinator._
 
 object PathParser extends Model {
 
   import Path._
+  import xml.Elem
 
   override def isDefinedAt(x: Elem): Boolean = x.label =~= "path"
 
@@ -18,11 +19,18 @@ object PathParser extends Model {
   }
 }
 
-object Path {
+object Path extends JavaTokenParsers {
   sealed trait PathCommand
   trait Absolute
   trait Relative
   type Coords = (Double, Double)
+
+  def parsedDouble = floatingPointNumber ^^ (_.toDouble)
+
+  def twoCoords = (floatingPointNumber <~ ",") ~ floatingPointNumber
+
+  def lineTo = "l" ~> whiteSpace ~> twoCoords
+  def moveTo = "m" ~> whiteSpace ~> twoCoords
 
   case class ClosePath() extends PathCommand
   case class MoveTo(point: Coords) extends PathCommand
@@ -34,7 +42,8 @@ case class Path(commands: PathCommand*) extends Code {
   import Path._
 
   override def toAndroidCode: AndroidCode =
-    java"""{
+    java"""
+      {
       Path path = new Path()
       ${
       commands.foldLeft("") { (str, cmd) =>
