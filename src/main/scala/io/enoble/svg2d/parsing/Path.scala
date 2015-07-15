@@ -5,11 +5,15 @@ import io.enoble.svg2d.parsing.Path.PathCommand
 import scala.xml.Elem
 
 object PathParser extends Model {
+
+  import Path._
+
   override def isDefinedAt(x: Elem): Boolean = x.label =~= "path"
+
   override def apply(v1: Elem): Option[Code] = {
-    val pathCoords = v1.attribute("d")
+    val pathCoords = v1.getOpt("d")
     pathCoords map { coords =>
-      Code.empty
+      Path(MoveTo((1, 2)))
     }
   }
 }
@@ -21,16 +25,29 @@ object Path {
   type Coords = (Double, Double)
 
   case class ClosePath() extends PathCommand
-  case class MoveTo(point: Coords)
-  case class LineTo(point: Coords)
-
+  case class MoveTo(point: Coords) extends PathCommand
+  case class LineTo(point: Coords) extends PathCommand
 }
 
-case class Path(commands: Seq[PathCommand]) extends Code {
+case class Path(commands: PathCommand*) extends Code {
 
-  override def toAndroidCode: AndroidCode = {
-    ""
-  }
+  import Path._
+
+  override def toAndroidCode: AndroidCode =
+    java"""{
+      Path path = new Path()
+      ${
+      commands.foldLeft("") { (str, cmd) =>
+        str + "\n" + (cmd match {
+          case LineTo((x, y)) => s"path.lineTo($x, $y)"
+          case MoveTo((x, y)) => s"path.moveTo($x, $y)"
+          case ClosePath() => s"path.close()"
+        })
+      }
+    }
+      }
+    """.stripMargin
+
   override def toIOSCode: IOSCode = {
     ""
   }

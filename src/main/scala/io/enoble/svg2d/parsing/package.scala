@@ -11,6 +11,7 @@ package object parsing {
   type ParseError = Exception
   implicit class HasAttributes(val x: xml.Elem) extends AnyVal {
     def getOrDefault(n: String, default: String): String = x.attribute(n).map(_.head.text).getOrElse(default)
+    def getOpt(n: String): Option[String] = x.attribute(n).map(_.head.text)
   }
   implicit class CaseInsensitiveEquals(val s: String) extends AnyVal {
     def =~=(other: String) = other.equalsIgnoreCase(s)
@@ -31,4 +32,7 @@ package object parsing {
   }
   val parsers = List(CircleParser, EllipseParser, Text)
   implicit val codeInstances = CodeInstances
+  implicit class JavaHelper(val sc: StringContext) extends AnyVal {
+    def java(args: Any*): String = ("\n" + sc.parts.mkString).split("\n").mkString(";\n").trim()
+  }
 }
