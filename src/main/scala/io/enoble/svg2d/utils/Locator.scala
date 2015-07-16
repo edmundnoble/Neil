@@ -1,9 +1,11 @@
-package io.enoble.svg2d
+package io.enoble.svg2d.utils
 
 import java.io.File
+
 import io.enoble.svg2d.parsing.Parse
+
+import scalaz.Scalaz._
 import scalaz._
-import Scalaz._
 
 object Locator {
   def main(args: Array[String]): Unit = {

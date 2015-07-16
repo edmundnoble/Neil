@@ -20,24 +20,32 @@ object PathParser extends Model {
 }
 
 object Path extends JavaTokenParsers {
+  type Coords = (Double, Double)
   sealed trait PathCommand
   trait Absolute
   trait Relative
-  type Coords = (Double, Double)
-
-  object Parsers extends JavaTokenParsers {
-    val parsedDouble = floatingPointNumber ^^ (_.toDouble)
-
-    val twoCoords = (parsedDouble <~ ",") ~ parsedDouble
-
-    val lineTo = "l" ~> whiteSpace ~> twoCoords
-
-    val moveTo = "m" ~> whiteSpace ~> twoCoords
-  }
-
   case class ClosePath() extends PathCommand
   case class MoveTo(point: Coords) extends PathCommand
   case class LineTo(point: Coords) extends PathCommand
+  case class Cubic(c1: Coords, c2: Coords, c: Coords) extends PathCommand
+
+  object Parsers extends JavaTokenParsers {
+    import scala.language.implicitConversions
+
+    implicit def TildeToTuple[A, B, C](tf: ((A, B)) => C): ((~[A, B]) => C) = (t: ~[A, B]) => tf((t._1, t._2))
+    implicit def TildeToTuple[A, B](tf: ~[A, B]): (A, B) = (tf._1, tf._2)
+
+    def parsedDouble = floatingPointNumber ^^ (_.toDouble)
+    def twoCoords: Parser[~[Double, Double]] = (parsedDouble <~ ",") ~ parsedDouble
+    def spaceAndCoords: Parser[~[Double, Double]] = whiteSpace ~> twoCoords
+    def lineTo: Parser[PathCommand] = ("l" ~> spaceAndCoords) ^^ LineTo
+    def moveTo: Parser[PathCommand] = ("m" ~> spaceAndCoords) ^^ MoveTo
+    def cubic: Parser[PathCommand] = ("c" ~> spaceAndCoords ~ spaceAndCoords ~ spaceAndCoords ) ^^ {
+      case c1 ~ c2 ~ c  => Cubic(c1, c2, c)
+    }
+    def closePath: Parser[PathCommand] = "z" ^^ (_ => ClosePath())
+  }
+
 }
 
 
