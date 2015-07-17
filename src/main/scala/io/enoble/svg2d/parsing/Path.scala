@@ -45,6 +45,7 @@ object Path extends JavaTokenParsers {
   object Parsers extends JavaTokenParsers {
 
     import scala.language.implicitConversions
+    import scalaz.std.list._
 
     implicit def tildeToTupleFun[A, B, C](tf: ((A, B)) => C): ((~[A, B]) => C) = (t: ~[A, B]) => tf((t._1, t._2))
     implicit def tildeToTuple2[A, B](tf: ~[A, B]): (A, B) = (tf._1, tf._2)
@@ -53,25 +54,32 @@ object Path extends JavaTokenParsers {
     implicit def tildeToTuple4K[F[_] : Functor, A, B, C, D](tf: F[~[~[A, B], ~[C, D]]]): F[((A, B), (C, D))] = tf.map(tildeToTuple4)
 
     def parsedDouble = floatingPointNumber ^^ (_.toDouble)
-    def twoCoords: Parser[~[Double, Double]] = (parsedDouble <~ ",") ~ parsedDouble
-    def spaceAndCoords: Parser[~[Double, Double]] = regex(whiteSpace).? ~> twoCoords
-    def lineTo: Parser[PathCommand] = (("L" ~> spaceAndCoords) ^^ LineToRel) | (("l" ~> spaceAndCoords) ^^ LineTo)
-    def horizLineTo: Parser[PathCommand] = (("H" ~> whiteSpace ~> parsedDouble) ^^ HorizLineToRel) | (("h" ~> whiteSpace ~> parsedDouble) ^^ HorizLineTo)
-    def vertLineTo: Parser[PathCommand] = (("v" ~> whiteSpace ~> parsedDouble) ^^ VerticalLineToRel) | (("V" ~> whiteSpace ~> parsedDouble) ^^ VerticalLineTo)
+    def wsp = whiteSpace
+    def commaWsp = (wsp.+ ~> ",".? ~> wsp.*) | ("," ~> wsp.*)
+    def doubleWsp = wsp ~> parsedDouble
+
+    def twoCoords: Parser[~[Double, Double]] = (parsedDouble <~ commaWsp) ~ parsedDouble
+    def wspAndCoords: Parser[~[Double, Double]] = commaWsp.? ~> twoCoords
+    def lineTo: Parser[PathCommand] = (("L" ~> wspAndCoords) ^^ LineToRel) | (("l" ~> wspAndCoords) ^^ LineTo)
+    def horizLineTo: Parser[PathCommand] = (("h" ~> doubleWsp) ^^ HorizLineToRel) | (("H" ~> doubleWsp) ^^ HorizLineTo)
+    def vertLineTo: Parser[PathCommand] = (("v" ~> doubleWsp) ^^ VerticalLineToRel) | (("V" ~> doubleWsp) ^^ VerticalLineTo)
     def makeCurveTo[T](f: (List[(Coords, Coords)]) => T) = (a: List[~[~[Double, Double], ~[Double, Double]]]) => f(tildeToTuple4K(a))
-    def curveToArgs = (spaceAndCoords ~ spaceAndCoords).*
+    def curveToArgs = ((wspAndCoords <~ commaWsp) ~ wspAndCoords).*
     def curveTo: Parser[PathCommand] = ("c" ~> curveToArgs ^^ makeCurveTo(CurveTo)) | ("C" ~> curveToArgs ^^ makeCurveTo(CurveToRel))
-    def moveTo: Parser[PathCommand] = ("M" ~> spaceAndCoords) ^^ MoveTo
+    def smoothCurveTo: Parser[PathCommand] = ("c" ~> curveToArgs ^^ makeCurveTo(CurveTo)) | ("C" ~> curveToArgs ^^ makeCurveTo(CurveToRel))
+    def moveTo: Parser[PathCommand] = ("M" ~> wspAndCoords) ^^ MoveTo
+    //def quadTo: Parser[PathCommand] =
     // TODO: Find out what this is for
     //def moveToRel: Parser[PathCommand] = ("m" ~> spaceAndCoords) ^^ MoveToRel
-    def cubic: Parser[PathCommand] = ("c" ~> spaceAndCoords ~ spaceAndCoords ~ spaceAndCoords) ^^ {
+    def cubic: Parser[PathCommand] = ("c" ~> wspAndCoords ~ wspAndCoords ~ wspAndCoords) ^^ {
       case c1 ~ c2 ~ c => Cubic(c1, c2, c)
     }
-    def cubicRel: Parser[PathCommand] = ("C" ~> spaceAndCoords ~ spaceAndCoords ~ spaceAndCoords) ^^ {
+    def cubicRel: Parser[PathCommand] = ("C" ~> wspAndCoords ~ wspAndCoords ~ wspAndCoords) ^^ {
       case c1 ~ c2 ~ c => CubicRel(c1, c2, c)
     }
     def closePath: Parser[PathCommand] = "z" ^^ (_ => ClosePath())
-    def command: Parser[PathCommand] = closePath | lineTo | horizLineTo | vertLineTo | curveTo | smoothCurveTo | quadCurveTo | smoothQuadCurveTo | ellipticalArc
+    def command: Parser[PathCommand] = closePath | lineTo | horizLineTo | vertLineTo | curveTo //| //smoothCurveTo |
+      //quadCurveTo | smoothQuadCurveTo | ellipticalArc
     def path: Parser[~[PathCommand, Seq[PathCommand]]] = moveTo ~ command.*
   }
 
@@ -90,7 +98,9 @@ case class Path(commands: PathCommand*) extends Code {
       commands.foldLeft("") { (str, cmd) =>
         str + "\n" + (cmd match {
           case LineTo((x, y)) => s"path.lineTo($x, $y)"
+          case LineToRel((x, y)) => s"path.rLineTo($x, $y)"
           case MoveTo((x, y)) => s"path.moveTo($x, $y)"
+          case MoveToRel((x, y)) => s"path.rMoveTo($x, $y)"
           case ClosePath() => s"path.close()"
         })
       }

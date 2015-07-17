@@ -30,19 +30,19 @@ object Parse {
   }
 
   def elementStats(x: xml.Elem): Map[String, Int] = {
-    traverse((e: xml.Elem) => List(e.label))(x).foldLeft(Map[String, Int]()) {
+    traverse((e: xml.Elem) => Vector(e.label))(x).foldLeft(Map[String, Int]()) {
       (map, str) => map + (str -> (map.getOrElse(str, 0) + 1))
     }
   }
 
   def pathStats(x: xml.Elem): Map[Char, Int] = {
-    traverse((e: xml.Elem) => if (e.label == "path") List(e.attribute("d").get.head.text.filter(c => c.isLetter)) else Nil)(x).flatten.foldLeft(Map[Char, Int]()) {
+    traverse((e: xml.Elem) => if (e.label == "path") Vector(e.attribute("d").get.head.text.filter(c => c.isLetter)) else Vector.empty[String])(x).flatten.foldLeft(Map[Char, Int]()) {
       (map, str) => map + (str -> (map.getOrElse(str, 0) + 1))
     }
   }
 
   def attributeStats(x: xml.Elem): Map[String, Int] = {
-    val attrs = traverse((e: xml.Elem) => e.attributes.asAttrMap.keys.toList)(x)
+    val attrs = traverse((e: xml.Elem) => e.attributes.asAttrMap.keys.toVector)(x)
     attrs.foldLeft(Map[String, Int]()) {
       (map, str) => map + (str -> (map.getOrElse(str, 0) + 1))
     }
