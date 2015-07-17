@@ -9,22 +9,21 @@ import scalaz._
 import Scalaz._
 
 object Parse {
-  def traverse[A, T[_] : MonadPlus](f: (xml.Elem) => T[A])(x: xml.Elem): T[A] = {
+  def traverse[A, T[_]](f: (xml.Elem) => T[A])(x: xml.Elem)(implicit M: Monoid[T[A]]): T[A] = {
     def inner(x: xml.Node): Trampoline[T[A]] = {
-      val MP = MonadPlus[T]
       val res = x match {
         case x1: Elem =>
           f(x1)
         case _ =>
-          MP.empty[A]
+          M.zero
       }
-      val tramp = x.child.foldLeft(Trampoline.delay(MP.empty[A])) { (acc, x) =>
+      val tramp = x.child.foldLeft(Trampoline.delay(M.zero)) { (acc, x) =>
         for {
           rep <- Trampoline.suspend(inner(x))
           prev <- acc
-        } yield MP.plus(prev, rep)
+        } yield prev |+| rep
       }
-      tramp.map(t => MP.plus(t, res))
+      tramp.map(_ |+| res)
     }
     inner(x).run
   }
