@@ -40,6 +40,8 @@ object Path extends JavaTokenParsers {
   case class CubicRel(c1: Coords, c2: Coords, c: Coords) extends PathCommand
   case class CurveTo(params: List[(Coords, Coords)]) extends PathCommand
   case class CurveToRel(params: List[(Coords, Coords)]) extends PathCommand
+  case class SmoothCurveTo(params: List[(Coords, Coords)]) extends PathCommand
+  case class SmoothCurveToRel(params: List[(Coords, Coords)]) extends PathCommand
   case class Quad(c1: Coords, c: Coords) extends PathCommand
 
   object Parsers extends JavaTokenParsers {
@@ -66,7 +68,7 @@ object Path extends JavaTokenParsers {
     def makeCurveTo[T](f: (List[(Coords, Coords)]) => T) = (a: List[~[~[Double, Double], ~[Double, Double]]]) => f(tildeToTuple4K(a))
     def curveToArgs = ((wspAndCoords <~ commaWsp) ~ wspAndCoords).*
     def curveTo: Parser[PathCommand] = ("c" ~> curveToArgs ^^ makeCurveTo(CurveTo)) | ("C" ~> curveToArgs ^^ makeCurveTo(CurveToRel))
-    def smoothCurveTo: Parser[PathCommand] = ("c" ~> curveToArgs ^^ makeCurveTo(CurveTo)) | ("C" ~> curveToArgs ^^ makeCurveTo(CurveToRel))
+    def smoothCurveTo: Parser[PathCommand] = ("c" ~> curveToArgs ^^ makeCurveTo(SmoothCurveTo)) | ("C" ~> curveToArgs ^^ makeCurveTo(SmoothCurveToRel))
     def moveTo: Parser[PathCommand] = ("M" ~> wspAndCoords) ^^ MoveTo
     //def quadTo: Parser[PathCommand] =
     // TODO: Find out what this is for
@@ -78,7 +80,7 @@ object Path extends JavaTokenParsers {
       case c1 ~ c2 ~ c => CubicRel(c1, c2, c)
     }
     def closePath: Parser[PathCommand] = "z" ^^ (_ => ClosePath())
-    def command: Parser[PathCommand] = closePath | lineTo | horizLineTo | vertLineTo | curveTo //| //smoothCurveTo |
+    def command: Parser[PathCommand] = closePath | lineTo | horizLineTo | vertLineTo | curveTo | smoothCurveTo //|
       //quadCurveTo | smoothQuadCurveTo | ellipticalArc
     def path: Parser[~[PathCommand, Seq[PathCommand]]] = moveTo ~ command.*
   }
