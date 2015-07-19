@@ -36,8 +36,8 @@ object Path extends JavaTokenParsers {
   case class VerticalLineToRel(y: Double) extends PathCommand
   case class HorizLineTo(x: Double) extends PathCommand
   case class HorizLineToRel(x: Double) extends PathCommand
-  case class Cubic(c1: Coords, c2: Coords, c: Coords) extends PathCommand
-  case class CubicRel(c1: Coords, c2: Coords, c: Coords) extends PathCommand
+  case class Cubic(params: List[(Coords, Coords, Coords)]) extends PathCommand
+  case class CubicRel(params: List[(Coords, Coords, Coords)]) extends PathCommand
   case class CurveTo(params: List[(Coords, Coords)]) extends PathCommand
   case class CurveToRel(params: List[(Coords, Coords)]) extends PathCommand
   case class SmoothCurveTo(params: List[(Coords, Coords)]) extends PathCommand
@@ -49,13 +49,19 @@ object Path extends JavaTokenParsers {
     import scala.language.implicitConversions
     import scalaz.std.list._
 
+    // I'd like to know why I need to do this. I don't want to have a billion (uncomposable) abstractions
+    // to switch between every time I go between the parser world and the real world
     implicit def tildeToTupleFun[A, B, C](tf: ((A, B)) => C): ((~[A, B]) => C) = (t: ~[A, B]) => tf((t._1, t._2))
     implicit def tildeToTuple2[A, B](tf: ~[A, B]): (A, B) = (tf._1, tf._2)
     implicit def tildeToTuple3[A, B, C](tf: ~[~[A, B], C]): (A, B, C) = (tf._1._1, tf._1._2, tf._2)
     implicit def tildeToTuple4[A, B, C, D](tf: ~[~[A, B], ~[C, D]]): ((A, B), (C, D)) = ((tf._1._1, tf._1._2), (tf._2._1, tf._2._2))
     implicit def tildeToTuple4K[F[_] : Functor, A, B, C, D](tf: F[~[~[A, B], ~[C, D]]]): F[((A, B), (C, D))] = tf.map(tildeToTuple4)
     def makeCurveTo[T](f: (List[(Coords, Coords)]) => T) = (a: List[~[~[Double, Double], ~[Double, Double]]]) => f(tildeToTuple4K(a))
-
+    def makeCubic[T](f: (List[(Coords, Coords, Coords)]) => T) = {
+      (a: List[~[~[~[Double, Double], ~[Double, Double]], ~[Double, Double]]]) => {
+        f(a.map { case c1 ~ c2 ~ c => (c1, c2, c) })
+      }
+    }
     def parsedDouble = floatingPointNumber ^^ (_.toDouble)
     def wsp = whiteSpace
     def commaWsp = (wsp.+ ~> ",".? ~> wsp.*) | ("," ~> wsp.*)
@@ -74,15 +80,11 @@ object Path extends JavaTokenParsers {
     // TODO: Find out what this is for
     //def moveToRel: Parser[PathCommand] = ("m" ~> spaceAndCoords) ^^ MoveToRel
     def threeCoords = wspAndCoords ~ wspAndCoords ~ wspAndCoords
-    def cubic: Parser[PathCommand] = ("c" ~> threeCoords) ^^ {
-      case c1 ~ c2 ~ c => Cubic(c1, c2, c)
-    } | ("C" ~> threeCoords) ^^ {
-      case c1 ~ c2 ~ c => CubicRel(c1, c2, c)
-    }
+    def cubicArgs = threeCoords.*
+    def cubic: Parser[PathCommand] = ("c" ~> cubicArgs ^^ makeCubic(Cubic)) | (("C" ~> cubicArgs) ^^ makeCubic(CubicRel))
     def closePath: Parser[PathCommand] = "z" ^^ (_ => ClosePath())
-    def command: Parser[PathCommand] = closePath | lineTo | horizLineTo | vertLineTo | curveTo | smoothCurveTo //|
-      //quadCurveTo | ellipticalArc
-    def path: Parser[~[PathCommand, Seq[PathCommand]]] = moveTo ~ command.*
+    def command: Parser[PathCommand] = closePath | lineTo | horizLineTo | vertLineTo | curveTo | smoothCurveTo | cubic | quadCurveTo | ellipticalArc
+    def path: Parser[~[PathCommand, Seq[PathCommand]]] = (moveTo <~ commaWsp) ~ command.*
   }
 
 }

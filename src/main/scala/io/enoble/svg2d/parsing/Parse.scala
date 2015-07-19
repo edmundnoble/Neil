@@ -9,7 +9,7 @@ import scalaz._
 import Scalaz._
 
 object Parse {
-  def traverse[A, T[_]](f: (xml.Elem) => T[A])(x: xml.Elem)(implicit M: Monoid[T[A]]): T[A] = {
+  def foldXml[A, T[_]](f: (xml.Elem) => T[A])(x: xml.Elem)(implicit M: Monoid[T[A]]): T[A] = {
     def inner(x: xml.Node): Trampoline[T[A]] = {
       val res = x match {
         case x1: Elem =>
@@ -29,25 +29,27 @@ object Parse {
   }
 
   def elementStats(x: xml.Elem): Map[String, Int] = {
-    traverse((e: xml.Elem) => Vector(e.label))(x).foldLeft(Map[String, Int]()) {
-      (map, str) => map + (str -> (map.getOrElse(str, 0) + 1))
-    }
+    foldXml((e: xml.Elem) => Vector(e.label))(x).elemCount
+  }
+
+  implicit class ElemCountOps[T](val x: Seq[T]) {
+    def elemCount = x.foldLeft(Map[T, Int]()) { case (map, key) => map + (key -> (map.getOrElse(key, 0) + 1)) }
   }
 
   def pathStats(x: xml.Elem): Map[Char, Int] = {
-    traverse((e: xml.Elem) => if (e.label == "path") Vector(e.attribute("d").get.head.text.filter(c => c.isLetter)) else Vector.empty[String])(x).flatten.foldLeft(Map[Char, Int]()) {
-      (map, str) => map + (str -> (map.getOrElse(str, 0) + 1))
-    }
+    val pathCommands = foldXml((e: xml.Elem) =>
+      if (e.label == "path") e.attribute("d").get.head.text.filter(c => c.isLetter).toVector
+      else Vector.empty[Char]
+    )(x)
+      pathCommands.elemCount
   }
 
   def attributeStats(x: xml.Elem): Map[String, Int] = {
-    val attrs = traverse((e: xml.Elem) => e.attributes.asAttrMap.keys.toVector)(x)
-    attrs.foldLeft(Map[String, Int]()) {
-      (map, str) => map + (str -> (map.getOrElse(str, 0) + 1))
-    }
+    val attrs = foldXml((e: xml.Elem) => e.attributes.asAttrMap.keys.toVector)(x)
+    attrs.elemCount
   }
 
-  def parseAll: xml.Elem => Option[Code] = traverse(parseDrawable)
+  def parseAll: xml.Elem => Option[Code] = foldXml(parseDrawable)
 
   def parseDrawable: xml.Elem => Option[Code] = parsers.reduce(_ orElse _) makeTotal (_ => None)
 }
