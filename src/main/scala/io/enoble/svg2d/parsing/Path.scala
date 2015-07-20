@@ -25,17 +25,15 @@ object PathParser extends Model {
 object Path extends JavaTokenParsers {
   type Coords = (Double, Double)
   sealed trait PathCommand
-  trait Absolute
-  trait Relative
   case class ClosePath() extends PathCommand
-  case class MoveTo(point: Coords) extends PathCommand
-  case class MoveToRel(point: Coords) extends PathCommand
-  case class LineTo(point: Coords) extends PathCommand
-  case class LineToRel(point: Coords) extends PathCommand
-  case class VerticalLineTo(y: Double) extends PathCommand
-  case class VerticalLineToRel(y: Double) extends PathCommand
-  case class HorizLineTo(x: Double) extends PathCommand
-  case class HorizLineToRel(x: Double) extends PathCommand
+  case class MoveTo(points: Seq[Coords]) extends PathCommand
+  case class MoveToRel(points: Seq[Coords]) extends PathCommand
+  case class LineTo(points: Seq[Coords]) extends PathCommand
+  case class LineToRel(point: Seq[Coords]) extends PathCommand
+  case class VerticalLineTo(y: Seq[Double]) extends PathCommand
+  case class VerticalLineToRel(y: Seq[Double]) extends PathCommand
+  case class HorizLineTo(x: Seq[Double]) extends PathCommand
+  case class HorizLineToRel(x: Seq[Double]) extends PathCommand
   case class Cubic(params: List[(Coords, Coords, Coords)]) extends PathCommand
   case class CubicRel(params: List[(Coords, Coords, Coords)]) extends PathCommand
   case class SmoothCubic(params: List[(Coords, Coords, Coords)]) extends PathCommand
@@ -43,8 +41,8 @@ object Path extends JavaTokenParsers {
   case class Quad(params: List[(Coords, Coords)]) extends PathCommand
   case class QuadRel(params: List[(Coords, Coords)]) extends PathCommand
   case class EllipticParam(r: Coords, rotX: Double, largeArc: Boolean, sweep: Boolean, p: Coords)
-  case class Elliptic(params: List[EllipticParam])
-  case class EllipticRel(params: List[EllipticParam])
+  case class Elliptic(params: List[EllipticParam]) extends PathCommand
+  case class EllipticRel(params: List[EllipticParam]) extends PathCommand
 
   object Parsers extends JavaTokenParsers {
 
@@ -54,6 +52,7 @@ object Path extends JavaTokenParsers {
     // I'd like to know why I need to do this. I don't want to have a billion (uncomposable) abstractions
     // to switch between every time I go between the parser world and the real world
     implicit def tildeToTupleFun[A, B, C](tf: ((A, B)) => C): ((~[A, B]) => C) = (t: ~[A, B]) => tf((t._1, t._2))
+    implicit def tildeToTupleK[F[_]: Functor, A, B, C](tf: (F[(A, B)]) => C): (F[~[A, B]]) => C = (t: F[~[A, B]]) => tf(t.map(tildeToTuple2))
     implicit def tildeToTuple2[A, B](tf: ~[A, B]): (A, B) = (tf._1, tf._2)
     implicit def tildeToTuple3[A, B, C](tf: ~[~[A, B], C]): (A, B, C) = (tf._1._1, tf._1._2, tf._2)
     implicit def tildeToTuple4[A, B, C, D](tf: ~[~[A, B], ~[C, D]]): ((A, B), (C, D)) = ((tf._1._1, tf._1._2), (tf._2._1, tf._2._2))
@@ -76,22 +75,25 @@ object Path extends JavaTokenParsers {
     def threeCoordPairs = wspPair ~ wspPair ~ coordPair
     def wspAndCoordPairs: Parser[~[~[Double, Double], ~[Double, Double]]] = commaWsp.* ~> twoCoordPairs
     def wspAndCoord: Parser[~[Double, Double]] = commaWsp.* ~> coordPair
-    def lineTo: Parser[PathCommand] = (("L" ~> wspAndCoord) ^^ LineToRel) | (("l" ~> wspAndCoord) ^^ LineTo)
-    def horizLineTo: Parser[PathCommand] = (("h" ~> wspDouble) ^^ HorizLineToRel) | (("H" ~> wspDouble) ^^ HorizLineTo)
-    def vertLineTo: Parser[PathCommand] = (("v" ~> wspDouble) ^^ VerticalLineToRel) | (("V" ~> wspDouble) ^^ VerticalLineTo)
-    def moveTo: Parser[PathCommand] = ("M" ~> wspAndCoord) ^^ MoveTo
+    def moveToArgs = rep1sep(wspAndCoord, commaWsp.?)
+    def moveTo: Parser[PathCommand] = ("M" ~> moveToArgs) ^^ MoveTo
+    def lineToArgs = moveToArgs
+    def lineTo: Parser[PathCommand] = (("L" ~> lineToArgs) ^^ LineToRel) | (("l" ~> lineToArgs) ^^ LineTo)
+    def singleLineToArgs = rep1sep(wspDouble, commaWsp.?)
+    def horizLineTo: Parser[PathCommand] = (("h" ~> singleLineToArgs) ^^ HorizLineToRel) | (("H" ~> singleLineToArgs) ^^ HorizLineTo)
+    def vertLineTo: Parser[PathCommand] = (("v" ~> singleLineToArgs) ^^ VerticalLineToRel) | (("V" ~> singleLineToArgs) ^^ VerticalLineTo)
     // TODO: Find out what this is for
     //def moveToRel: Parser[PathCommand] = ("m" ~> spaceAndCoords) ^^ MoveToRel
-    def quadArgs = repsep(twoCoordPairs, commaWsp.?)
+    def quadArgs = rep1sep(twoCoordPairs, commaWsp.?)
     def quad: Parser[PathCommand] = ("q" ~> quadArgs ^^ makeTwoArg(Quad)) | ("Q" ~> quadArgs ^^ makeTwoArg(QuadRel))
 //    def ellipticArgs: Parser[EllipticParam] =
 //    def ellipticalArc: Parser[PathCommand] = ("a" ~> ellipticArgs ^^ Elliptic) | ("A" ~> ellipticArgs ^^ EllipticRel)
-    def cubicArgs = repsep(threeCoordPairs, commaWsp.?)
+    def cubicArgs = rep1sep(threeCoordPairs, commaWsp.?)
     def cubic: Parser[PathCommand] = ("c" ~> cubicArgs ^^ makeThreeArg(Cubic)) | (("C" ~> cubicArgs) ^^ makeThreeArg(CubicRel))
     def smoothCubic: Parser[PathCommand] = ("s" ~> cubicArgs ^^ makeThreeArg(SmoothCubic)) | ("S" ~> cubicArgs ^^ makeThreeArg(SmoothCubicRel))
     def closePath: Parser[PathCommand] = "z" ^^ (_ => ClosePath())
     def command: Parser[PathCommand] = closePath | lineTo | horizLineTo | vertLineTo | cubic | smoothCubic | quad //| ellipticalArc
-    def path: Parser[~[PathCommand, Seq[PathCommand]]] = (moveTo <~ commaWsp) ~ command.*
+    def path: Parser[Seq[~[PathCommand, Seq[PathCommand]]]] = rep1sep((moveTo <~ wsp) ~ rep1sep(command, wsp), wsp)
   }
 
 }
