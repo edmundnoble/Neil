@@ -16,9 +16,8 @@ object PathParser extends Model {
 
   override def apply(v1: Elem): Option[Code] = {
     val pathCoords = v1.getOpt("d")
-    pathCoords map { coords =>
-      Path(MoveTo((1, 2)))
-    }
+    pathCoords foreach println
+    None
   }
 }
 
@@ -52,7 +51,7 @@ object Path extends JavaTokenParsers {
     // I'd like to know why I need to do this. I don't want to have a billion (uncomposable) abstractions
     // to switch between every time I go between the parser world and the real world
     implicit def tildeToTupleFun[A, B, C](tf: ((A, B)) => C): ((~[A, B]) => C) = (t: ~[A, B]) => tf((t._1, t._2))
-    implicit def tildeToTupleK[F[_]: Functor, A, B, C](tf: (F[(A, B)]) => C): (F[~[A, B]]) => C = (t: F[~[A, B]]) => tf(t.map(tildeToTuple2))
+    implicit def tildeToTupleK[F[_] : Functor, A, B, C](tf: (F[(A, B)]) => C): (F[~[A, B]]) => C = (t: F[~[A, B]]) => tf(t.map(tildeToTuple2))
     implicit def tildeToTuple2[A, B](tf: ~[A, B]): (A, B) = (tf._1, tf._2)
     implicit def tildeToTuple3[A, B, C](tf: ~[~[A, B], C]): (A, B, C) = (tf._1._1, tf._1._2, tf._2)
     implicit def tildeToTuple4[A, B, C, D](tf: ~[~[A, B], ~[C, D]]): ((A, B), (C, D)) = ((tf._1._1, tf._1._2), (tf._2._1, tf._2._2))
@@ -86,13 +85,14 @@ object Path extends JavaTokenParsers {
     //def moveToRel: Parser[PathCommand] = ("m" ~> spaceAndCoords) ^^ MoveToRel
     def quadArgs = rep1sep(twoCoordPairs, commaWsp.?)
     def quad: Parser[PathCommand] = ("q" ~> quadArgs ^^ makeTwoArg(Quad)) | ("Q" ~> quadArgs ^^ makeTwoArg(QuadRel))
-//    def ellipticArgs: Parser[EllipticParam] =
-//    def ellipticalArc: Parser[PathCommand] = ("a" ~> ellipticArgs ^^ Elliptic) | ("A" ~> ellipticArgs ^^ EllipticRel)
+    //    def ellipticArgs: Parser[EllipticParam] =
+    //    def ellipticalArc: Parser[PathCommand] = ("a" ~> ellipticArgs ^^ Elliptic) | ("A" ~> ellipticArgs ^^ EllipticRel)
     def cubicArgs = rep1sep(threeCoordPairs, commaWsp.?)
     def cubic: Parser[PathCommand] = ("c" ~> cubicArgs ^^ makeThreeArg(Cubic)) | (("C" ~> cubicArgs) ^^ makeThreeArg(CubicRel))
     def smoothCubic: Parser[PathCommand] = ("s" ~> cubicArgs ^^ makeThreeArg(SmoothCubic)) | ("S" ~> cubicArgs ^^ makeThreeArg(SmoothCubicRel))
     def closePath: Parser[PathCommand] = "z" ^^ (_ => ClosePath())
-    def command: Parser[PathCommand] = closePath | lineTo | horizLineTo | vertLineTo | cubic | smoothCubic | quad //| ellipticalArc
+    def command: Parser[PathCommand] = closePath | lineTo | horizLineTo | vertLineTo | cubic | smoothCubic | quad
+    //| ellipticalArc
     def path: Parser[Seq[~[PathCommand, Seq[PathCommand]]]] = rep1sep((moveTo <~ wsp) ~ rep1sep(command, wsp), wsp)
   }
 
@@ -104,22 +104,36 @@ case class Path(commands: PathCommand*) extends Code {
   import Path._
 
   override def toAndroidCode: AndroidCode =
-    java"""
+    s"""
       {
       Path path = new Path()
       ${
       commands.foldLeft("") { (str, cmd) =>
         str + "\n" + (cmd match {
-          case LineTo((x, y)) => s"path.lineTo($x, $y)"
-          case LineToRel((x, y)) => s"path.rLineTo($x, $y)"
-          case MoveTo((x, y)) => s"path.moveTo($x, $y)"
-          case MoveToRel((x, y)) => s"path.rMoveTo($x, $y)"
-          case ClosePath() => s"path.close()"
-        })
+          case ClosePath() => "path.close()"
+          case MoveTo(coords) => foldStr(coords, { case (x, y) => s"path.moveTo($x, $y)" })
+          case MoveToRel(coords) => foldStr(coords, { case (x, y) => s"path.rMoveTo($x, $y)" })
+          case LineTo(coords) => foldStr(coords, { case (x, y) => s"path.lineTo($x, $y)" })
+          case LineToRel(coords) => foldStr(coords, { case (x, y) => s"path.rLineTo($x, $y)" })
+          case VerticalLineTo(coords) => ??? // TODO
+          case VerticalLineToRel(coords) => foldStr(coords, (y) => s"path.rLineTo(0, $y)")
+          case HorizLineTo(coords) => ??? // TODO
+          case HorizLineToRel(coords) => foldStr(coords, (x) => s"path.rLineTo($x, 0)")
+          case Cubic(coords) => foldStr(coords, {case ((x1, y1), (x2, y2), (x3, y3)) => s"path.cubicTo($x1, $y1, $x2, $y2, $x3, $y3)"})
+          case CubicRel(coords) => foldStr(coords, {case ((x1, y1), (x2, y2), (x3, y3)) => s"path.rCubicTo($x1, $y1, $x2, $y2, $x3, $y3)"})
+          case SmoothCubic(coords) => ??? // TODO
+          case SmoothCubicRel(coords) => ??? // TODO
+          case Quad(coords) => foldStr(coords, {case ((x1, y1), (x2, y2)) => s"path.quadTo($x1, $y1, $x2, $y2)"})
+          case QuadRel(coords) => foldStr(coords, {case ((x1, y1), (x2, y2)) => s"path.rQuadTo($x1, $y1, $x2, $y2)"})
+          case Elliptic(_) => ??? // TODO
+          case EllipticRel(_) => ??? // TODO
+        }) + ";"
       }
     }
       }
     """.stripMargin
+
+  def foldStr[T](s: Seq[T], f: T => String) = s.map(f).mkString(";\n")
 
   override def toIOSCode: IOSCode = {
     ""
