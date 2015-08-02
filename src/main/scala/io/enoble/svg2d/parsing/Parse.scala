@@ -1,6 +1,6 @@
 package io.enoble.svg2d.parsing
 
-import com.squareup.javapoet.MethodSpec
+
 
 import scala.language.higherKinds
 import scala.xml.Elem

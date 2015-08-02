@@ -1,11 +1,27 @@
 package io.enoble.svg2d
 
-import com.squareup.javapoet.MethodSpec
+
 import scalaz._
 import Scalaz._
 
 package object parsing {
-  type AndroidCode = String
+
+  implicit class CodeBuildingOps(val str: String) extends AnyVal {
+    def +|+(other: String) = str + ";\n" + other
+  }
+  implicit object AndroidInstances extends Monoid[AndroidCode] {
+    override def zero: AndroidCode = AndroidCode("")
+    override def append(f1: AndroidCode, f2: => AndroidCode): AndroidCode = AndroidCode(f1.unsafe +|+ f2.unsafe)
+  }
+
+  case class AndroidCode(unsafe: String) extends AnyVal {
+    def asString = unsafe +|+ ";\n"
+  }
+
+  object AndroidCode {
+    def apply(strs: String*) = AndroidCode(strs.reduce(_ +|+ _))
+  }
+
   type IOSCode = String
   type Model = PartialFunction[xml.Elem, Option[Code]]
   type ParseError = Exception

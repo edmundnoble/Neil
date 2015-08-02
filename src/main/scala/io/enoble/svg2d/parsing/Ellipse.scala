@@ -1,6 +1,7 @@
 package io.enoble.svg2d.parsing
 
-import com.squareup.javapoet.MethodSpec.Builder
+
+import io.enoble.svg2d.parsing.Code.Named
 
 import scala.xml.Elem
 import scalaz._
@@ -30,6 +31,8 @@ case class DrawEllipse(x: Double, y: Double, rx: Double, ry: Double) extends Cod
   def top = y + (ry / 2)
   def right = x + (rx / 2)
   def bottom = y - (ry / 2)
-  override lazy val toAndroidCode: AndroidCode = s"RectF bounds = new RectF($left, $top, $right, $bottom);" + "c.drawOval(bounds, p);"
-  override lazy val toIOSCode: IOSCode = ""
+  override lazy val toAndroidCode: Named[AndroidCode] =
+    AndroidCode(s"RectF bounds = new RectF($left, $top, $right, $bottom)", "c.drawOval(bounds, p)")
+      .pure[Named]
+  override lazy val toIOSCode: Named[IOSCode] = "".pure[Named]
 }

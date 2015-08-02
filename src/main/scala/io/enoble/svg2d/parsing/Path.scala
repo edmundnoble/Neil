@@ -1,5 +1,6 @@
 package io.enoble.svg2d.parsing
 
+import io.enoble.svg2d.parsing.Code.Named
 import io.enoble.svg2d.parsing.Path.PathCommand
 
 import scala.util.parsing.combinator._
@@ -59,7 +60,7 @@ object Path extends JavaTokenParsers {
     def makeTwoArg[T](f: (List[(Coords, Coords)]) => T) = (a: List[~[~[Double, Double], ~[Double, Double]]]) => f(tildeToTuple4K(a))
     def makeThreeArg[T](f: (List[(Coords, Coords, Coords)]) => T) = {
       (a: List[~[~[~[Double, Double], ~[Double, Double]], ~[Double, Double]]]) => {
-        f(a.map { case c1 ~ c2 ~ c => (c1, c2, c) })
+        f(a.map { case (c1 ~ c2) ~ (c3 ~ c4) ~ (c5 ~ c6) => ((c1, c2), (c3, c4), (c5, c6)) })
       }
     }
 
@@ -103,39 +104,56 @@ case class Path(commands: PathCommand*) extends Code {
 
   import Path._
 
-  override def toAndroidCode: AndroidCode =
+  def trackCoords(x: Double, y: Double): String =
     s"""
-      {
-      Path path = new Path()
-      ${
+      x = $x;
+      x = $y;
+     """
+
+  override def toAndroidCode: Named[AndroidCode] =
+    ("{" +|+
+      "Path path = new Path()" +|+
+      "double x = 0" +|+
+      "double y = 0" +|+
       commands.foldLeft("") { (str, cmd) =>
-        str + "\n" + (cmd match {
+        str +|+ (cmd match {
           case ClosePath() => "path.close()"
-          case MoveTo(coords) => foldStr(coords, { case (x, y) => s"path.moveTo($x, $y)" })
-          case MoveToRel(coords) => foldStr(coords, { case (x, y) => s"path.rMoveTo($x, $y)" })
-          case LineTo(coords) => foldStr(coords, { case (x, y) => s"path.lineTo($x, $y)" })
-          case LineToRel(coords) => foldStr(coords, { case (x, y) => s"path.rLineTo($x, $y)" })
-          case VerticalLineTo(coords) => ??? // TODO
-          case VerticalLineToRel(coords) => foldStr(coords, (y) => s"path.rLineTo(0, $y)")
-          case HorizLineTo(coords) => ??? // TODO
-          case HorizLineToRel(coords) => foldStr(coords, (x) => s"path.rLineTo($x, 0)")
-          case Cubic(coords) => foldStr(coords, {case ((x1, y1), (x2, y2), (x3, y3)) => s"path.cubicTo($x1, $y1, $x2, $y2, $x3, $y3)"})
-          case CubicRel(coords) => foldStr(coords, {case ((x1, y1), (x2, y2), (x3, y3)) => s"path.rCubicTo($x1, $y1, $x2, $y2, $x3, $y3)"})
+          case MoveTo(coords) => foldCmd(coords, { case (x, y) => s"path.moveTo($x, $y)" +|+ setCoords(x, y) })
+          case MoveToRel(coords) => foldCmd(coords, { case (x, y) => s"path.rMoveTo($x, $y)" +|+ changeCoords(x, y)})
+          case LineTo(coords) => foldCmd(coords, { case (x, y) => s"path.lineTo($x, $y)" +|+ setCoords(x, y) })
+          case LineToRel(coords) => foldCmd(coords, { case (x, y) => s"path.rLineTo($x, $y)" +|+ changeCoords(x, y) })
+          case VerticalLineTo(coords) => foldCmd(coords, y => s"path.lineTo(x, $y)" +|+ setYCoord(y) )
+          case VerticalLineToRel(coords) => foldCmd(coords, y => s"path.rLineTo(0, $y)" +|+ changeYCoord(y))
+          case HorizLineTo(coords) => foldCmd(coords, x => s"path.lineTo($x, y)" +|+ setXCoord(x) )
+          case HorizLineToRel(coords) => foldCmd(coords, x => s"path.rLineTo($x, 0)" +|+ changeXCoord(x))
+          case Cubic(coords) => foldCmd(coords, { case ((x1, y1), (x2, y2), (x3, y3)) => s"path.cubicTo($x1, $y1, $x2, $y2, $x3, $y3)" }) // TODO
+          case CubicRel(coords) => foldCmd(coords, { case ((x1, y1), (x2, y2), (x3, y3)) => s"path.rCubicTo($x1, $y1, $x2, $y2, $x3, $y3)" }) // TODO
           case SmoothCubic(coords) => ??? // TODO
           case SmoothCubicRel(coords) => ??? // TODO
-          case Quad(coords) => foldStr(coords, {case ((x1, y1), (x2, y2)) => s"path.quadTo($x1, $y1, $x2, $y2)"})
-          case QuadRel(coords) => foldStr(coords, {case ((x1, y1), (x2, y2)) => s"path.rQuadTo($x1, $y1, $x2, $y2)"})
+          case Quad(coords) => foldCmd(coords, { case ((x1, y1), (x2, y2)) => s"path.quadTo($x1, $y1, $x2, $y2)" }) // TODO
+          case QuadRel(coords) => foldCmd(coords, { case ((x1, y1), (x2, y2)) => s"path.rQuadTo($x1, $y1, $x2, $y2)" }) // TODO
           case Elliptic(_) => ??? // TODO
           case EllipticRel(_) => ??? // TODO
-        }) + ";"
+        })
       }
-    }
-      }
-    """.stripMargin
+      ).pure[Named]
 
-  def foldStr[T](s: Seq[T], f: T => String) = s.map(f).mkString(";\n")
+  def setCoords(x: Double, y: Double): String = setXCoord(x) +|+ setYCoord(y)
 
-  override def toIOSCode: IOSCode = {
-    ""
+  def setYCoord(y: Double): String = s"y = $y"
+  def setXCoord(x: Double): String = s"x = $x"
+
+  def changeYCoord(dy: Double): String = s"y += $dy"
+  def changeXCoord(dx: Double): String = s"x += $dx"
+
+  def changeCoords(dx: Double, dy: Double): String = changeXCoord(dx) +|+ changeYCoord(dy)
+
+  def foldCmd[T](s: Seq[T], f: T => String): String = s.map(f) match {
+    case x if x.isEmpty => ""
+    case xs => xs.reduce(_ +|+ _)
+  }
+
+  override def toIOSCode: Named[IOSCode] = {
+    "".pure[Named]
   }
 }

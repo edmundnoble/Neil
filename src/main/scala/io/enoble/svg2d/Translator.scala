@@ -2,7 +2,7 @@ package io.enoble.svg2d
 
 import java.io.File
 
-import com.squareup.javapoet.MethodSpec
+
 import io.enoble.svg2d.parsing.Parse
 
 import scala.util.parsing.combinator._

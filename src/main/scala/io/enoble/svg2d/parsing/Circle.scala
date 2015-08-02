@@ -1,6 +1,7 @@
 package io.enoble.svg2d.parsing
 
-import com.squareup.javapoet.MethodSpec.Builder
+
+import io.enoble.svg2d.parsing.Code.Named
 
 import scala.xml.Elem
 import scalaz._
@@ -25,6 +26,6 @@ object CircleParser extends Model {
 }
 
 case class DrawCircle(x: Double, y: Double, r: Double) extends Code {
-  override def toAndroidCode: AndroidCode = s"c.drawCircle($x, $y, $r, p);"
-  override def toIOSCode: IOSCode = s""
+  override def toAndroidCode: Named[AndroidCode] = AndroidCode(s"c.drawCircle($x, $y, $r, p);").pure[Named]
+  override def toIOSCode: Named[IOSCode] = s"".pure[Named]
 }

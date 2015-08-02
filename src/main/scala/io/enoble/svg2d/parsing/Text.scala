@@ -1,6 +1,11 @@
 package io.enoble.svg2d.parsing
 
+import io.enoble.svg2d.parsing.Code.Named
+
 import scala.xml.Elem
+
+import scalaz._
+import Scalaz._
 
 object Text extends Model {
   override def isDefinedAt(x: Elem): Boolean = x.label =~= "text"
@@ -14,7 +19,7 @@ object Text extends Model {
 }
 
 case class DrawText(text: String, posX: Double, posY: Double) extends Code {
-  override def toAndroidCode: AndroidCode = s"c.drawText($text, $posX, $posY, p);"
+  override def toAndroidCode: Named[AndroidCode] = AndroidCode(s"c.drawText($text, $posX, $posY, p)").pure[Named]
 
-  override def toIOSCode: IOSCode = ???
+  override def toIOSCode: Named[IOSCode] = "".pure[Named]
 }
