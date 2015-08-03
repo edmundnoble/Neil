@@ -50,7 +50,7 @@ object Path {
     import scala.language.implicitConversions
     import scalaz.std.list._
 
-    case class NamedFunction[T, V](f: T => V, name: String) extends (T => V){
+    case class NamedFunction[T, V](f: T => V, name: String) extends (T => V) {
       def apply(t: T) = f(t)
       override def toString() = name
     }
@@ -60,47 +60,47 @@ object Path {
     val Digits = NamedFunction('0' to '9' contains (_: Char), "Digits")
     val StringChars = NamedFunction(!"\"\\".contains(_: Char), "StringChars")
 
-    val space         = P( CharsWhile(Whitespace).? )
-    val digits        = P( CharsWhile(Digits))
-    val exponent      = P( CharIn("eE") ~ CharIn("+-").? ~ digits )
-    val fractional    = P( "." ~ digits )
-    val integral      = P( "0" | CharIn('1' to '9') ~ digits.? )
+    val space = P(CharsWhile(Whitespace).?)
+    val digits = P(CharsWhile(Digits))
+    val exponent = P(CharIn("eE") ~ CharIn("+-").? ~ digits)
+    val fractional = P("." ~ digits)
+    val integral = P("0" | CharIn('1' to '9') ~ digits.?)
 
-    val number: P[Double] = P( CharIn("+-").? ~ integral ~ fractional.? ~ exponent.? ).!.map(_.toDouble)
+    val number: P[Double] = P(CharIn("+-").? ~ integral ~ fractional.? ~ exponent.?).!.map(_.toDouble)
 
-    val wsp = space
-    val commaWsp = (wsp.rep(1) ~ ",".? ~ wsp.rep) | ("," ~ wsp.rep)
-    val wspDouble = wsp.rep ~ number
+    val wsp = P(space)
+    val commaWsp = P((wsp.rep(1) ~ ",".? ~ wsp.rep) | ("," ~ wsp.rep))
+    val wspDouble = P(wsp.rep ~ number)
 
     val coordPair: P[Coords] = (number ~ commaWsp.?) ~ number
-    val twoCoordPairs: P[(Coords, Coords)] = (coordPair ~ commaWsp.? ~ coordPair).map {
+    val twoCoordPairs: P[(Coords, Coords)] = P((coordPair ~ commaWsp.? ~ coordPair).map {
       case (x1, y1, c1) => ((x1, y1), c1)
-    }
-    val threeCoordPairs: P[(Coords, Coords, Coords)] = (coordPair ~ commaWsp.? ~ coordPair ~ commaWsp.? ~ coordPair).map {
+    })
+    val threeCoordPairs: P[(Coords, Coords, Coords)] = P((coordPair ~ commaWsp.? ~ coordPair ~ commaWsp.? ~ coordPair).map {
       case (x1, y1, c1, c2) => ((x1, y1), c1, c2)
-    }
-    val wspAndCoordPairs: P[(Coords, Coords)] = commaWsp.rep ~ twoCoordPairs
-    val wspAndCoord: P[Coords] = commaWsp.rep ~ coordPair
-    val moveToArgs = (wspAndCoord ~ commaWsp.?).rep(1)
-    val moveTo: P[PathCommand] = ("M" ~ moveToArgs) map MoveTo
-    val lineToArgs = moveToArgs
-    val lineTo: P[PathCommand] = (("L" ~ lineToArgs) map LineToRel) | (("l" ~ lineToArgs) map LineTo)
-    def singleLineToArgs = (wspDouble ~ commaWsp.?).rep(1)
-    def horizLineTo: P[PathCommand] = (("h" ~ singleLineToArgs) map HorizLineToRel) | (("H" ~ singleLineToArgs) map HorizLineTo)
-    def vertLineTo: P[PathCommand] = (("v" ~ singleLineToArgs) map VerticalLineToRel) | (("V" ~ singleLineToArgs) map VerticalLineTo)
+    })
+    val wspAndCoordPairs: P[(Coords, Coords)] = P(commaWsp.rep ~ twoCoordPairs)
+    val wspAndCoord: P[Coords] = P(commaWsp.rep ~ coordPair)
+    val moveToArgs = P((wspAndCoord ~ commaWsp.?).rep(1))
+    val moveTo: P[PathCommand] = P(("M" ~ moveToArgs) map MoveTo)
+    val lineToArgs = P(moveToArgs)
+    val lineTo: P[PathCommand] = P((("L" ~ lineToArgs) map LineToRel) | (("l" ~ lineToArgs) map LineTo))
+    def singleLineToArgs = P((wspDouble ~ commaWsp.?).rep(1))
+    def horizLineTo: P[PathCommand] = P((("h" ~ singleLineToArgs) map HorizLineToRel) | (("H" ~ singleLineToArgs) map HorizLineTo))
+    def vertLineTo: P[PathCommand] = P((("v" ~ singleLineToArgs) map VerticalLineToRel) | (("V" ~ singleLineToArgs) map VerticalLineTo))
     // TODO: Find out what this is for
-    //def moveToRel: Parser[PathCommand] = ("m" ~> spaceAndCoords) ^^ MoveToRel
-    def quadArgs = (twoCoordPairs ~ commaWsp.?).rep(1)
-    def quad: P[PathCommand] = (("q" ~ quadArgs) map Quad) | (("Q" ~ quadArgs) map QuadRel)
+    //def moveToRel: Parser[PathCommand] =P(("m" ~> spaceAndCoords) ^^ MoveToRel)
+    def quadArgs = P((twoCoordPairs ~ commaWsp.?).rep(1))
+    def quad: P[PathCommand] = P((("q" ~ quadArgs) map Quad) | (("Q" ~ quadArgs) map QuadRel))
     //    def ellipticArgs: Parser[EllipticParam] =
     //    def ellipticalArc: Parser[PathCommand] = ("a" ~> ellipticArgs ^^ Elliptic) | ("A" ~> ellipticArgs ^^ EllipticRel)
-    def cubicArgs = (threeCoordPairs ~ commaWsp.?).rep(1)
-    def cubic: Parser[PathCommand] = ("c" ~ cubicArgs map Cubic) | ("C" ~ cubicArgs map CubicRel)
-    def smoothCubic: Parser[PathCommand] = ("s" ~ cubicArgs map SmoothCubic) | ("S" ~ cubicArgs map SmoothCubicRel)
-    def closePath: Parser[PathCommand] = CharIn("z") map (_ => ClosePath())
-    def command: Parser[PathCommand] = closePath | lineTo | horizLineTo | vertLineTo | cubic | smoothCubic | quad
+    def cubicArgs = P((threeCoordPairs ~ commaWsp.?).rep(1))
+    def cubic: Parser[PathCommand] = P(("c" ~ cubicArgs map Cubic) | ("C" ~ cubicArgs map CubicRel))
+    def smoothCubic: Parser[PathCommand] = P(("s" ~ cubicArgs map SmoothCubic) | ("S" ~ cubicArgs map SmoothCubicRel))
+    def closePath: Parser[PathCommand] = P(CharIn("z") map (_ => ClosePath()))
+    def command: Parser[PathCommand] = P(closePath | lineTo | horizLineTo | vertLineTo | cubic | smoothCubic | quad)
     //| ellipticalArc
-    def path: Parser[Seq[(PathCommand, Seq[PathCommand])]] = ((moveTo ~ wsp) ~ (command ~ wsp).rep(1) ~ wsp).rep(1)
+    def path: Parser[Seq[(PathCommand, Seq[PathCommand])]] = P(((moveTo ~ wsp) ~ (command ~ wsp).rep(1) ~ wsp).rep(1))
   }
 
 }
@@ -125,12 +125,12 @@ case class Path(commands: PathCommand*) extends Code {
         str +|+ (cmd match {
           case ClosePath() => "path.close()"
           case MoveTo(coords) => foldCmd[Coords](coords, { case (x, y) => s"path.moveTo($x, $y)" +|+ setCoords(x, y) })
-          case MoveToRel(coords) => foldCmd[Coords](coords, { case (x, y) => s"path.rMoveTo($x, $y)" +|+ changeCoords(x, y)})
+          case MoveToRel(coords) => foldCmd[Coords](coords, { case (x, y) => s"path.rMoveTo($x, $y)" +|+ changeCoords(x, y) })
           case LineTo(coords) => foldCmd[Coords](coords, { case (x, y) => s"path.lineTo($x, $y)" +|+ setCoords(x, y) })
           case LineToRel(coords) => foldCmd[Coords](coords, { case (x, y) => s"path.rLineTo($x, $y)" +|+ changeCoords(x, y) })
-          case VerticalLineTo(coords) => foldCmd[Double](coords, y => s"path.lineTo(x, $y)" +|+ setYCoord(y) )
+          case VerticalLineTo(coords) => foldCmd[Double](coords, y => s"path.lineTo(x, $y)" +|+ setYCoord(y))
           case VerticalLineToRel(coords) => foldCmd[Double](coords, y => s"path.rLineTo(0, $y)" +|+ changeYCoord(y))
-          case HorizLineTo(coords) => foldCmd[Double](coords, x => s"path.lineTo($x, y)" +|+ setXCoord(x) )
+          case HorizLineTo(coords) => foldCmd[Double](coords, x => s"path.lineTo($x, y)" +|+ setXCoord(x))
           case HorizLineToRel(coords) => foldCmd[Double](coords, x => s"path.rLineTo($x, 0)" +|+ changeXCoord(x))
           case Cubic(coords) => foldCmd[(Coords, Coords, Coords)](coords, { case ((x1, y1), (x2, y2), (x3, y3)) => s"path.cubicTo($x1, $y1, $x2, $y2, $x3, $y3)" }) // TODO
           case CubicRel(coords) => foldCmd[(Coords, Coords, Coords)](coords, { case ((x1, y1), (x2, y2), (x3, y3)) => s"path.rCubicTo($x1, $y1, $x2, $y2, $x3, $y3)" }) // TODO
@@ -142,7 +142,7 @@ case class Path(commands: PathCommand*) extends Code {
           case EllipticRel(_) => ??? // TODO
         })
       }
-      ).pure[Named]
+    ).pure[Named]
 
   def setCoords(x: Double, y: Double): String = setXCoord(x) +|+ setYCoord(y)
 
