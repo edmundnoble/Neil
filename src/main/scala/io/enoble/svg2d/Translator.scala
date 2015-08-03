@@ -5,7 +5,6 @@ import java.io.File
 
 import io.enoble.svg2d.parsing.Parse
 
-import scala.util.parsing.combinator._
 import scalaz._
 import Scalaz._
 import scala.io.Source

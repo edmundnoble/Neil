@@ -15,11 +15,11 @@ package object parsing {
   }
 
   case class AndroidCode(unsafe: String) extends AnyVal {
-    def asString = unsafe +|+ ";\n"
+    def asString: String = unsafe +|+ ";\n"
   }
 
   object AndroidCode {
-    def apply(strs: String*) = AndroidCode(strs.reduce(_ +|+ _))
+    def apply(strs: String*): AndroidCode = AndroidCode(strs.reduce(_ +|+ _))
   }
 
   type IOSCode = String
