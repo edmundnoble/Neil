@@ -19,10 +19,10 @@ object PathParser extends Model {
   override def apply(v1: Elem): Option[Code] = {
     val pathCoords = v1.getOpt("d")
     val parsedPath: Option[Result[Path]] = pathCoords.map(s => Path.Parsers.path.parse(s))
-    parsedPath.fold(None: Option[Code])(_ match {
+    parsedPath.flatMap {
       case Success(path, _) => Some(path)
       case Failure(_, _) => None
-    })
+    }
   }
 }
 
@@ -103,7 +103,7 @@ object Path {
     val command: Parser[PathCommand] = P(closePath | lineTo | horizLineTo | vertLineTo | cubic | smoothCubic | quad)
     //| ellipticalArc
     val pathCommands: Parser[Seq[(PathCommand, Seq[PathCommand])]] = P(((moveTo ~ space) ~ (command ~ space).rep(1) ~ space).rep(1))
-    val path: Parser[Path] = P(pathCommands.map ( seq => Path(seq.flatMap{ case (m: PathCommand, c: Seq[PathCommand]) => m +: c })))
+    val path: Parser[Path] = P(pathCommands.map(seq => Path(seq.flatMap { case (m: PathCommand, c: Seq[PathCommand]) => m +: c })))
   }
 
 }
@@ -112,6 +112,8 @@ object Path {
 case class Path(commands: Seq[PathCommand]) extends Code {
 
   import Path._
+  import scalaz._
+  import Scalaz._
 
   def trackCoords(x: Double, y: Double): String =
     s"""
@@ -119,48 +121,70 @@ case class Path(commands: Seq[PathCommand]) extends Code {
       x = $y;
      """
 
+  type CoordAware[T] = State[(Double, Double), T]
+
   override def toAndroidCode: Named[AndroidCode] =
     AndroidCode("{\n" +
       "Path path = new Path()",
-      "double x = 0",
-      "double y = 0",
-      commands.foldLeft("") { (str, cmd) =>
-        str +|+ (cmd match {
-          case ClosePath() => "path.close()"
-          case MoveTo(coords) => foldCmd[Coords](coords, { case (x, y) => s"path.moveTo($x, $y)" +|+ setCoords(x, y) })
-          case MoveToRel(coords) => foldCmd[Coords](coords, { case (x, y) => s"path.rMoveTo($x, $y)" +|+ changeCoords(x, y) })
-          case LineTo(coords) => foldCmd[Coords](coords, { case (x, y) => s"path.lineTo($x, $y)" +|+ setCoords(x, y) })
-          case LineToRel(coords) => foldCmd[Coords](coords, { case (x, y) => s"path.rLineTo($x, $y)" +|+ changeCoords(x, y) })
-          case VerticalLineTo(coords) => foldCmd[Double](coords, y => s"path.lineTo(x, $y)" +|+ setYCoord(y))
-          case VerticalLineToRel(coords) => foldCmd[Double](coords, y => s"path.rLineTo(0, $y)" +|+ changeYCoord(y))
-          case HorizLineTo(coords) => foldCmd[Double](coords, x => s"path.lineTo($x, y)" +|+ setXCoord(x))
-          case HorizLineToRel(coords) => foldCmd[Double](coords, x => s"path.rLineTo($x, 0)" +|+ changeXCoord(x))
-          case Cubic(coords) => foldCmd[(Coords, Coords, Coords)](coords, { case ((x1, y1), (x2, y2), (x, y)) => s"path.cubicTo($x1, $y1, $x2, $y2, $x, $y)" +|+ setCoords(x, y) }) // TODO
-          case CubicRel(coords) => foldCmd[(Coords, Coords, Coords)](coords, { case ((x1, y1), (x2, y2), (x, y)) => s"path.rCubicTo($x1, $y1, $x2, $y2, $x, $y)" +|+ changeCoords(x, y) }) // TODO
-          case SmoothCubic(coords) => ??? // TODO
-          case SmoothCubicRel(coords) => ??? // TODO
-          case Quad(coords) => foldCmd[(Coords, Coords)](coords, { case ((x1, y1), (x, y)) => s"path.quadTo($x1, $y1, $x, $y)" +|+ setCoords(x, y) }) // TODO
-          case QuadRel(coords) => foldCmd[(Coords, Coords)](coords, { case ((x1, y1), (x, y)) => s"path.rQuadTo($x1, $y1, $x, $y)" +|+ changeCoords(x, y) }) // TODO
-          case Elliptic(_) => ??? // TODO
-          case EllipticRel(_) => ??? // TODO
-        })
-      },
-    "}"
+      (commands.foldLeft("".pure[CoordAware]) { (sofar, cmd) =>
+        for {
+          str <- sofar
+          cmds <- cmd match {
+            case ClosePath() => "path.close()".pure[CoordAware]
+            case MoveTo(coords) => foldCmd[Coords](coords, { case (x, y) => for (_ <- put((x, y))) yield s"path.moveTo($x, $y)" })
+            case MoveToRel(coords) => foldCmd[Coords](coords, { case (x, y) => for (_ <- changeCoords(x, y)) yield (s"path.rMoveTo($x, $y)") })
+            case LineTo(coords) => foldCmd[Coords](coords, { case (x, y) => for (_ <- put((x, y))) yield s"path.lineTo($x, $y)" })
+            case LineToRel(coords) => foldCmd[Coords](coords, { case (x, y) => for (_ <- changeCoords(x, y)) yield s"path.rLineTo($x, $y)" })
+            case VerticalLineTo(coords) => foldCmd[Double](coords, y => for (_ <- setYCoord(y); p <- get[(Double, Double)]) yield s"path.lineTo(${p._1}, $y)")
+            case VerticalLineToRel(coords) => foldCmd[Double](coords, y => for (_ <- changeYCoord(y)) yield s"path.rLineTo(0, $y)")
+            case HorizLineTo(coords) => foldCmd[Double](coords, x => for (_ <- setXCoord(x); p <- get[(Double, Double)]) yield s"path.lineTo($x, ${p._2})")
+            case HorizLineToRel(coords) => foldCmd[Double](coords, x => for (_ <- changeXCoord(x)) yield s"path.rLineTo($x, 0)")
+            case Cubic(coords) => foldCmd[(Coords, Coords, Coords)](coords, { case ((x1, y1), (x2, y2), (x, y)) => for (_ <- put((x, y))) yield s"path.cubicTo($x1, $y1, $x2, $y2, $x, $y)" }) // TODO
+            case CubicRel(coords) => foldCmd[(Coords, Coords, Coords)](coords, { case ((x1, y1), (x2, y2), (x, y)) => for (_ <- changeCoords(x, y)) yield s"path.rCubicTo($x1, $y1, $x2, $y2, $x, $y)" }) // TODO
+            case SmoothCubic(coords) => ??? // TODO
+            case SmoothCubicRel(coords) => ??? // TODO
+            case Quad(coords) => foldCmd[(Coords, Coords)](coords, { case ((x1, y1), (x, y)) => for (_ <- put((x, y))) yield s"path.quadTo($x1, $y1, $x, $y)" }) // TODO
+            case QuadRel(coords) => foldCmd[(Coords, Coords)](coords, { case ((x1, y1), (x, y)) => for (_ <- changeCoords(x, y)) yield s"path.rQuadTo($x1, $y1, $x, $y)" }) // TODO
+            case Elliptic(_) => ??? // TODO
+            case EllipticRel(_) => ??? // TODO
+          }
+        } yield (str +|+ cmds)
+      }).run((0.0, 0.0))._2,
+      "}"
     ).pure[Named]
 
-  def setYCoord(y: Double): String = s"y = $y"
-  def setXCoord(x: Double): String = s"x = $x"
+  def changeYCoord(dy: Double): CoordAware[Unit] = for {
+    p <- get[(Double, Double)]
+    (oldX, oldY) = p
+    _ <- put((oldX, oldY + dy))
+  } yield ()
 
-  def setCoords(x: Double, y: Double): String = setXCoord(x) +|+ setYCoord(y)
+  def changeXCoord(dx: Double): CoordAware[Unit] = for {
+    p <- get[(Double, Double)]
+    (oldX, oldY) = p
+    _ <- put((oldX + dx, oldY))
+  } yield ()
 
-  def changeYCoord(dy: Double): String = s"y += $dy"
-  def changeXCoord(dx: Double): String = s"x += $dx"
+  def setYCoord(y: Double): CoordAware[Unit] = for {
+    p <- get[(Double, Double)]
+    (oldX, oldY) = p
+    _ <- put((oldX, y))
+  } yield ()
 
-  def changeCoords(dx: Double, dy: Double): String = changeXCoord(dx) +|+ changeYCoord(dy)
+  def setXCoord(x: Double): CoordAware[Unit] = for {
+    p <- get[(Double, Double)]
+    (oldX, oldY) = p
+    _ <- put((x, oldY))
+  } yield ()
 
-  def foldCmd[T](s: Seq[T], f: T => String): String = s.map(f) match {
-    case x if x.isEmpty => ""
-    case xs => xs.reduce(_ +|+ _)
+  def changeCoords(dx: Double, dy: Double): CoordAware[Unit] = for {
+    _ <- changeYCoord(dy)
+    _ <- changeXCoord(dx)
+  } yield ()
+
+  def foldCmd[T](s: Seq[T], f: T => CoordAware[String]): CoordAware[String] = s.map(f) match {
+    case x if x.isEmpty => "".pure[CoordAware]
+    case xs => xs.reduce((a, b) => for (x <- a; y <- b) yield (x +|+ y))
   }
 
   override def toIOSCode: Named[IOSCode] = {
