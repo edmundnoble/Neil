@@ -18,4 +18,10 @@ class PathTests extends FunSuite {
       LineToRel(ArrayBuffer((-1.6914, -1.6914))), CubicRel(ArrayBuffer(((-0.1936, -0.1936), (-0.32064, -0.2422), (-0.55078, -0.2422)))), ClosePath())), simplePath.length))
   }
 
+  test("A quadratic should be parsable") {
+    val simpleQuad = "q 0,0 0,0"
+    val parsed = quad.parse(simpleQuad)
+    println(parsed)
+  }
+
 }

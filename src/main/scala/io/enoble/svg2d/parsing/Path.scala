@@ -21,7 +21,7 @@ object PathParser extends Model {
     val parsedPath: Option[Result[Path]] = pathCoords.map(s => Path.Parsers.path.parse(s))
     parsedPath.flatMap {
       case Success(path, _) => Some(path)
-      case Failure(_, _) => None
+      case x@Failure(e, _) => System.err.println(x); None
     }
   }
 }
@@ -76,8 +76,8 @@ object Path {
     val commaWsp = P((space ~ ",".? ~ space) | ("," ~ space))
     val wspDouble = P(space ~ number)
 
-    val coordPair: P[Coords] = (number ~ commaWsp.?) ~! number
-    val twoCoordPairs: P[(Coords, Coords)] = P((coordPair ~ commaWsp.? ~ coordPair).map {
+    val coordPair: P[Coords] = (number ~ commaWsp) ~! number
+    val twoCoordPairs: P[(Coords, Coords)] = P((coordPair ~ commaWsp ~ coordPair).map {
       case (x1, y1, c1) => ((x1, y1), c1)
     })
     val threeCoordPairs: P[(Coords, Coords, Coords)] = P((coordPair ~ commaWsp.? ~ coordPair ~ commaWsp.? ~ coordPair).map {
@@ -92,15 +92,22 @@ object Path {
     val singleLineToArgs = P((wspDouble ~ commaWsp).rep(1))
     val horizLineTo: P[PathCommand] = P((("h" ~ singleLineToArgs) map HorizLineToRel) | (("H" ~ singleLineToArgs) map HorizLineTo))
     val vertLineTo: P[PathCommand] = P((("v" ~ singleLineToArgs) map VerticalLineToRel) | (("V" ~ singleLineToArgs) map VerticalLineTo))
-    val quadArgs = P((twoCoordPairs ~ commaWsp).rep(1))
-    val quad: P[PathCommand] = P((("q" ~ quadArgs) map QuadRel) | (("Q" ~ quadArgs) map Quad))
-    //    def ellipticArgs: Parser[EllipticParam] =
-    //    def ellipticalArc: Parser[PathCommand] = ("a" ~> ellipticArgs ^^ Elliptic) | ("A" ~> ellipticArgs ^^ EllipticRel)
+    val quadArgs = P((twoCoordPairs ~ commaWsp.?).rep(1))
+    val quad: P[PathCommand] = P((("q" ~ space ~ quadArgs) map QuadRel) | (("Q" ~ space ~ quadArgs) map Quad))
+    val flag: P[Boolean] = CharIn("01").!.map{
+      case "0" => false
+      case "1" => true
+    }
+    val ellipticParam: P[EllipticParam] = (number ~ commaWsp ~ number ~ commaWsp ~ number ~ commaWsp ~ flag ~ commaWsp ~ flag ~ commaWsp ~ coordPair) map {
+      case (x, y, z, f, f2, coords) => EllipticParam((x, y), z, f, f2, coords)
+    }
+    val ellipticArgs: P[Seq[EllipticParam]] = P((ellipticParam ~ commaWsp).rep(1))
+    val ellipticalArc: P[PathCommand] = P(("a" ~ ellipticArgs map EllipticRel) | ("A" ~ ellipticArgs map Elliptic))
     val cubicArgs = P((threeCoordPairs ~ commaWsp).rep(1))
     val cubic: Parser[PathCommand] = P(("c" ~ space ~ cubicArgs map CubicRel) | ("C" ~ space ~ cubicArgs map Cubic))
     val smoothCubic: Parser[PathCommand] = P(("s" ~ cubicArgs map SmoothCubicRel) | ("S" ~ cubicArgs map SmoothCubic))
     val closePath: Parser[PathCommand] = P((CharIn("z") | CharIn("Z")) map (_ => ClosePath()))
-    val command: Parser[PathCommand] = P(closePath | lineTo | horizLineTo | vertLineTo | cubic | smoothCubic | quad)
+    val command: Parser[PathCommand] = P(closePath | lineTo | horizLineTo | vertLineTo | cubic | smoothCubic | quad | ellipticalArc)
     //| ellipticalArc
     val pathCommands: Parser[Seq[(PathCommand, Seq[PathCommand])]] = P(((moveTo ~ space) ~ (command ~ space).rep(1) ~ space).rep(1))
     val path: Parser[Path] = P(pathCommands.map(seq => Path(seq.flatMap { case (m: PathCommand, c: Seq[PathCommand]) => m +: c })))
