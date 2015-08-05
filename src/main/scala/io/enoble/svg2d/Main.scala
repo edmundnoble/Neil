@@ -2,7 +2,6 @@ package io.enoble.svg2d
 
 import java.io.File
 
-
 import io.enoble.svg2d.parsing.Parse
 
 import scalaz._
@@ -16,7 +15,8 @@ object Main {
       sys.exit(1)
     }
     val xml = scala.xml.XML.loadFile(new File(args(0)))
-    println(Parse.parseAll(xml))
+    val parsed = Parse.parseAll(xml)
+    println(parsed)
   }
 }
 

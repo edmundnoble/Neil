@@ -11,13 +11,18 @@ object PathParser extends Model {
 
   import Path._
   import xml.Elem
+  import fastparse.core._
+  import fastparse.core.Result._
 
   override def isDefinedAt(x: Elem): Boolean = x.label =~= "path"
 
   override def apply(v1: Elem): Option[Code] = {
     val pathCoords = v1.getOpt("d")
-    pathCoords foreach println
-    None
+    val parsedPath: Option[Result[Path]] = pathCoords.map(s => Path.Parsers.path.parse(s))
+    parsedPath.fold(None: Option[Code])(_ match {
+      case Success(path, _) => Some(path)
+      case Failure(_, _) => None
+    })
   }
 }
 
@@ -68,45 +73,43 @@ object Path {
 
     val number: P[Double] = P(CharIn("+-").? ~ integral ~ fractional.? ~ exponent.?).!.map(_.toDouble)
 
-    val wsp = P(space)
-    val commaWsp = P((wsp.rep(1) ~ ",".? ~ wsp.rep) | ("," ~ wsp.rep))
-    val wspDouble = P(wsp.rep ~ number)
+    val commaWsp = P((space ~ ",".? ~ space) | ("," ~ space))
+    val wspDouble = P(space ~ number)
 
-    val coordPair: P[Coords] = (number ~ commaWsp.?) ~ number
+    val coordPair: P[Coords] = (number ~ commaWsp.?) ~! number
     val twoCoordPairs: P[(Coords, Coords)] = P((coordPair ~ commaWsp.? ~ coordPair).map {
       case (x1, y1, c1) => ((x1, y1), c1)
     })
     val threeCoordPairs: P[(Coords, Coords, Coords)] = P((coordPair ~ commaWsp.? ~ coordPair ~ commaWsp.? ~ coordPair).map {
       case (x1, y1, c1, c2) => ((x1, y1), c1, c2)
     })
-    val wspAndCoordPairs: P[(Coords, Coords)] = P(commaWsp.rep ~ twoCoordPairs)
-    val wspAndCoord: P[Coords] = P(commaWsp.rep ~ coordPair)
-    val moveToArgs = P((wspAndCoord ~ commaWsp.?).rep(1))
-    val moveTo: P[PathCommand] = P(("M" ~ moveToArgs) map MoveTo)
+    val wspAndCoordPairs: P[(Coords, Coords)] = P(commaWsp ~ twoCoordPairs)
+    val wspAndCoord: P[Coords] = P(commaWsp ~ coordPair)
+    val moveToArgs = P(wspAndCoord.rep(1))
+    val moveTo: P[PathCommand] = P(("m" ~ moveToArgs map MoveToRel) | ("M" ~ moveToArgs map MoveTo))
     val lineToArgs = P(moveToArgs)
-    val lineTo: P[PathCommand] = P((("L" ~ lineToArgs) map LineToRel) | (("l" ~ lineToArgs) map LineTo))
-    def singleLineToArgs = P((wspDouble ~ commaWsp.?).rep(1))
+    val lineTo: P[PathCommand] = P(("L" ~ lineToArgs map LineTo) | ("l" ~ lineToArgs map LineToRel))
+    def singleLineToArgs = P((wspDouble ~ commaWsp).rep(1))
     def horizLineTo: P[PathCommand] = P((("h" ~ singleLineToArgs) map HorizLineToRel) | (("H" ~ singleLineToArgs) map HorizLineTo))
     def vertLineTo: P[PathCommand] = P((("v" ~ singleLineToArgs) map VerticalLineToRel) | (("V" ~ singleLineToArgs) map VerticalLineTo))
-    // TODO: Find out what this is for
-    //def moveToRel: Parser[PathCommand] =P(("m" ~> spaceAndCoords) ^^ MoveToRel)
-    def quadArgs = P((twoCoordPairs ~ commaWsp.?).rep(1))
-    def quad: P[PathCommand] = P((("q" ~ quadArgs) map Quad) | (("Q" ~ quadArgs) map QuadRel))
+    def quadArgs = P((twoCoordPairs ~ commaWsp).rep(1))
+    def quad: P[PathCommand] = P((("q" ~ quadArgs) map QuadRel) | (("Q" ~ quadArgs) map Quad))
     //    def ellipticArgs: Parser[EllipticParam] =
     //    def ellipticalArc: Parser[PathCommand] = ("a" ~> ellipticArgs ^^ Elliptic) | ("A" ~> ellipticArgs ^^ EllipticRel)
-    def cubicArgs = P((threeCoordPairs ~ commaWsp.?).rep(1))
-    def cubic: Parser[PathCommand] = P(("c" ~ cubicArgs map Cubic) | ("C" ~ cubicArgs map CubicRel))
-    def smoothCubic: Parser[PathCommand] = P(("s" ~ cubicArgs map SmoothCubic) | ("S" ~ cubicArgs map SmoothCubicRel))
-    def closePath: Parser[PathCommand] = P(CharIn("z") map (_ => ClosePath()))
+    def cubicArgs = P((threeCoordPairs ~ commaWsp).rep(1))
+    def cubic: Parser[PathCommand] = P(("c" ~ space ~ cubicArgs map CubicRel) | ("C" ~ space ~ cubicArgs map Cubic))
+    def smoothCubic: Parser[PathCommand] = P(("s" ~ cubicArgs map SmoothCubicRel) | ("S" ~ cubicArgs map SmoothCubic))
+    def closePath: Parser[PathCommand] = P((CharIn("z") | CharIn("Z")) map (_ => ClosePath()))
     def command: Parser[PathCommand] = P(closePath | lineTo | horizLineTo | vertLineTo | cubic | smoothCubic | quad)
     //| ellipticalArc
-    def path: Parser[Seq[(PathCommand, Seq[PathCommand])]] = P(((moveTo ~ wsp) ~ (command ~ wsp).rep(1) ~ wsp).rep(1))
+    def pathCommands: Parser[Seq[(PathCommand, Seq[PathCommand])]] = P(((moveTo ~ space) ~ (command ~ space).rep(1) ~ space).rep(1))
+    def path: Parser[Path] = P(pathCommands.map ( seq => Path(seq.flatMap{ case (m: PathCommand, c: Seq[PathCommand]) => m +: c })))
   }
 
 }
 
 
-case class Path(commands: PathCommand*) extends Code {
+case class Path(commands: Seq[PathCommand]) extends Code {
 
   import Path._
 
@@ -117,10 +120,10 @@ case class Path(commands: PathCommand*) extends Code {
      """
 
   override def toAndroidCode: Named[AndroidCode] =
-    AndroidCode("{" +|+
-      "Path path = new Path()" +|+
-      "double x = 0" +|+
-      "double y = 0" +|+
+    AndroidCode("{\n" +
+      "Path path = new Path()",
+      "double x = 0",
+      "double y = 0",
       commands.foldLeft("") { (str, cmd) =>
         str +|+ (cmd match {
           case ClosePath() => "path.close()"
@@ -141,7 +144,8 @@ case class Path(commands: PathCommand*) extends Code {
           case Elliptic(_) => ??? // TODO
           case EllipticRel(_) => ??? // TODO
         })
-      }
+      },
+    "}"
     ).pure[Named]
 
   def setCoords(x: Double, y: Double): String = setXCoord(x) +|+ setYCoord(y)

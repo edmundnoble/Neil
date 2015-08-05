@@ -7,7 +7,7 @@ import Scalaz._
 package object parsing {
 
   implicit class CodeBuildingOps(val str: String) extends AnyVal {
-    def +|+(other: String) = str + ";\n" + other
+    def +|+(other: String) = if (other.trim.length == 0 || str.trim.length == 0) str + "\n" + other else str + ";\n" + other
   }
   implicit object AndroidInstances extends Monoid[AndroidCode] {
     override def zero: AndroidCode = AndroidCode("")
@@ -39,14 +39,9 @@ package object parsing {
     def ignore = ()
   }
   implicit class CombinePartial[T, R](val partial: PartialFunction[T, R]) extends AnyVal {
-    def makeTotal(total: (T) => R): T => R = { p =>
-      if (partial.isDefinedAt(p))
-        partial(p)
-      else
-        total(p)
-    }
+    def makeTotal(total: (T) => R): T => R = partial orElse { case x => total(x) }
   }
-  val parsers = List(CircleParser, EllipseParser, Text)
+  val parsers: List[Model] = List(CircleParser, EllipseParser, Text, PathParser)
   implicit val codeInstances = CodeInstances
   implicit class JavaHelper(val sc: StringContext) extends AnyVal {
     def java(args: Any*): String = ("\n" + sc.parts.mkString).split("\n").mkString(";\n").trim()
