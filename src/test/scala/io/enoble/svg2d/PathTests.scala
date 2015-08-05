@@ -21,7 +21,19 @@ class PathTests extends FunSuite {
   test("A quadratic should be parsable") {
     val simpleQuad = "q 0,0 0,0"
     val parsed = quad.parse(simpleQuad)
-    println(parsed)
+    assert(parsed == Result.Success(QuadRel(ArrayBuffer(((0.0, 0.0), (0.0, 0.0)))), simpleQuad.length))
+  }
+
+  test("An elliptic should be parsable") {
+    val simpleElliptic = "a 0,0 0 0,0 0,0"
+    val parsed = ellipticalArc.parse(simpleElliptic)
+    assert(parsed == Result.Success(EllipticRel(ArrayBuffer(EllipticParam((0.0, 0.0), 0.0, false, false, (0.0, 0.0)))), simpleElliptic.length))
+  }
+
+  test("A moveto should be parsable as a full path") {
+    val simpleMoveTo = "m 157.86809,496.83258 0,-32.796 -5.16279,0 0,32.796 5.16279,0"
+    val parsed = path.parse(simpleMoveTo)
+    assert(parsed == Result.Success(Path(ArrayBuffer(MoveToRel(ArrayBuffer((157.86809,496.83258), (0.0,-32.796), (-5.16279,0.0), (0.0,32.796), (5.16279,0.0))))), simpleMoveTo.length))
   }
 
 }

@@ -19,9 +19,10 @@ object PathParser extends Model {
   override def apply(v1: Elem): Option[Code] = {
     val pathCoords = v1.getOpt("d")
     val parsedPath: Option[Result[Path]] = pathCoords.map(s => Path.Parsers.path.parse(s))
+    if (parsedPath.isEmpty) System.err.println("No 'd' attribute found in path element")
     parsedPath.flatMap {
       case Success(path, _) => Some(path)
-      case x@Failure(e, _) => System.err.println(x); None
+      case x@Failure(e, _) => System.err.println(s"Failed to parse path: ${pathCoords.get}"); None
     }
   }
 }
@@ -85,6 +86,7 @@ object Path {
     })
     val wspAndCoordPairs: P[(Coords, Coords)] = P(commaWsp ~ twoCoordPairs)
     val wspAndCoord: P[Coords] = P(commaWsp ~ coordPair)
+    // TODO: All of the extra arguments to moveTo should be interpreted as lineTo's, according to the spec
     val moveToArgs = P(wspAndCoord.rep(1))
     val moveTo: P[PathCommand] = P(("m" ~ moveToArgs map MoveToRel) | ("M" ~ moveToArgs map MoveTo))
     val lineToArgs = P(moveToArgs)
@@ -102,14 +104,13 @@ object Path {
       case (x, y, z, f, f2, coords) => EllipticParam((x, y), z, f, f2, coords)
     }
     val ellipticArgs: P[Seq[EllipticParam]] = P((ellipticParam ~ commaWsp).rep(1))
-    val ellipticalArc: P[PathCommand] = P(("a" ~ ellipticArgs map EllipticRel) | ("A" ~ ellipticArgs map Elliptic))
+    val ellipticalArc: P[PathCommand] = P(("a" ~ space ~ ellipticArgs map EllipticRel) | ("A" ~ space ~ ellipticArgs map Elliptic))
     val cubicArgs = P((threeCoordPairs ~ commaWsp).rep(1))
     val cubic: Parser[PathCommand] = P(("c" ~ space ~ cubicArgs map CubicRel) | ("C" ~ space ~ cubicArgs map Cubic))
     val smoothCubic: Parser[PathCommand] = P(("s" ~ cubicArgs map SmoothCubicRel) | ("S" ~ cubicArgs map SmoothCubic))
     val closePath: Parser[PathCommand] = P((CharIn("z") | CharIn("Z")) map (_ => ClosePath()))
     val command: Parser[PathCommand] = P(closePath | lineTo | horizLineTo | vertLineTo | cubic | smoothCubic | quad | ellipticalArc)
-    //| ellipticalArc
-    val pathCommands: Parser[Seq[(PathCommand, Seq[PathCommand])]] = P(((moveTo ~ space) ~ (command ~ space).rep(1) ~ space).rep(1))
+    val pathCommands: Parser[Seq[(PathCommand, Seq[PathCommand])]] = P(((moveTo ~ space) ~ (command ~ space).rep ~ space).rep(1))
     val path: Parser[Path] = P(pathCommands.map(seq => Path(seq.flatMap { case (m: PathCommand, c: Seq[PathCommand]) => m +: c })))
   }
 

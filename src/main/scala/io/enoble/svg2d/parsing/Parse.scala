@@ -1,7 +1,5 @@
 package io.enoble.svg2d.parsing
 
-
-
 import scala.language.higherKinds
 import scala.xml.Elem
 import scalaz.Free.Trampoline
@@ -9,8 +7,8 @@ import scalaz._
 import Scalaz._
 
 object Parse {
-  def foldXml[A, T[_]](f: (xml.Elem) => T[A])(x: xml.Elem)(implicit M: Monoid[T[A]]): T[A] = {
-    def inner(x: xml.Node): Trampoline[T[A]] = {
+  def foldXml[A, B](f: (xml.Elem) => B)(x: xml.Elem)(implicit M: Monoid[B]): B = {
+    def inner(x: xml.Node): Trampoline[B] = {
       val res = x match {
         case x1: Elem =>
           f(x1)
