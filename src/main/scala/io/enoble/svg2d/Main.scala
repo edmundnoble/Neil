@@ -18,21 +18,21 @@ object Main {
       Console.err.println("Wrong number of arguments!")
       sys.exit(1)
     }
-    val filePath = Paths.get(args(0))
-    val isDir = Files.isDirectory(filePath)
+    val filePath = new File(args(0))
+    val isDir = filePath.isDirectory
     if (isDir) {
-      val svgFiles = Files.list(filePath).iterator().asScala
-      val xmlFiles = svgFiles.map(f => xml.XML.loadFile(f.toFile))
+      val svgFiles = filePath.listFiles()
+      val xmlFiles = svgFiles.map(f => xml.XML.loadFile(f))
       val parsed = xmlFiles.map(Parse.parseAll)
       val (successes, failures) = parsed.partition(_.isDefined)
       val successCount = successes.length
       val failureCount = failures.length
+      val successRate = (successCount * 100) / (successCount + failureCount).toDouble
       println(s"Successes: $successCount")
       println(s"Failures: $failureCount")
-      val df = new DecimalFormat("00.00")
-      println(s"Success rate: ${df.format(successCount * 100 / (successCount + failureCount).toDouble)}%")
+      println(f"Success rate: $successRate%2.2f%%")
     } else {
-      val xml = scala.xml.XML.loadFile(filePath.toFile)
+      val xml = scala.xml.XML.loadFile(filePath)
       val parsed = Parse.parseAll(xml)
       println(parsed)
     }
