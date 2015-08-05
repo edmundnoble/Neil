@@ -41,7 +41,7 @@ package object parsing {
   implicit class CombinePartial[T, R](val partial: PartialFunction[T, R]) extends AnyVal {
     def makeTotal(total: (T) => R): T => R = partial orElse { case x => total(x) }
   }
-  val parsers: List[Model] = List(CircleParser, EllipseParser, Text, PathParser)
+  val parsers: List[Model] = List(CircleParser, EllipseParser, Text, PathParser, RectParser)
   implicit val codeInstances = CodeInstances
   implicit class JavaHelper(val sc: StringContext) extends AnyVal {
     def java(args: Any*): String = ("\n" + sc.parts.mkString).split("\n").mkString(";\n").trim()

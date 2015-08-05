@@ -31,6 +31,8 @@ object Main {
       println(s"Successes: $successCount")
       println(s"Failures: $failureCount")
       println(f"Success rate: $successRate%2.2f%%")
+      val failedFiles = parsed.zipWithIndex.map(x => (x._1, svgFiles(x._2))).filter(_._1.isEmpty).map(_._2.getName)
+      println(s"Failed files: \n${failedFiles.mkString("\n")}")
     } else {
       val xml = scala.xml.XML.loadFile(filePath)
       val parsed = Parse.parseAll(xml)

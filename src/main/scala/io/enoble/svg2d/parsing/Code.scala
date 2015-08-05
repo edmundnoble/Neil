@@ -28,7 +28,7 @@ abstract class Code {
 object Code {
 
   type Named[A] = State[Map[String, Int], A]
-  def empty = new Code {
+  def empty: Code = new Code {
     def toAndroidCode = AndroidCode("").pure[Named]
     def toIOSCode = "".pure[Named]
   }

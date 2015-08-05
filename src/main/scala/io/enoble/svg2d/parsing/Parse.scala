@@ -49,5 +49,5 @@ object Parse {
 
   def parseAll: xml.Elem => Option[Code] = foldXml(parseDrawable)
 
-  def parseDrawable: xml.Elem => Option[Code] = parsers.reduce(_ orElse _) makeTotal (_ => None)
+  def parseDrawable: xml.Elem => Option[Code] = parsers.reduce(_ orElse _) makeTotal (_ => Some(Code.empty))
 }
