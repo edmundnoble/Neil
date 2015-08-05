@@ -108,7 +108,7 @@ object Path {
     val cubicArgs = P((threeCoordPairs ~ commaWsp).rep(1))
     val cubic: Parser[PathCommand] = P(("c" ~ space ~ cubicArgs map CubicRel) | ("C" ~ space ~ cubicArgs map Cubic))
     val smoothCubic: Parser[PathCommand] = P(("s" ~ cubicArgs map SmoothCubicRel) | ("S" ~ cubicArgs map SmoothCubic))
-    val closePath: Parser[PathCommand] = P((CharIn("z") | CharIn("Z")) map (_ => ClosePath()))
+    val closePath: Parser[PathCommand] = P(CharIn("zZ") map (_ => ClosePath()))
     val command: Parser[PathCommand] = P(closePath | lineTo | horizLineTo | vertLineTo | cubic | smoothCubic | quad | ellipticalArc)
     val pathCommands: Parser[Seq[(PathCommand, Seq[PathCommand])]] = P(((moveTo ~ space) ~ (command ~ space).rep ~ space).rep(1))
     val path: Parser[Path] = P(pathCommands.map(seq => Path(seq.flatMap { case (m: PathCommand, c: Seq[PathCommand]) => m +: c })))
@@ -165,12 +165,12 @@ case class Path(commands: Seq[PathCommand]) extends Code {
             xNow += x
             s"path.rLineTo($x, 0)"
           })
-          case Cubic(coords) => foldCmd[(Coords, Coords, Coords)](coords, { case ((x1, y1), (x2, y2), (x, y)) => setCoords(x, y); s"path.cubicTo($x1, $y1, $x2, $y2, $x, $y)" }) // TODO
-          case CubicRel(coords) => foldCmd[(Coords, Coords, Coords)](coords, { case ((x1, y1), (x2, y2), (x, y)) => changeCoords(x, y); s"path.rCubicTo($x1, $y1, $x2, $y2, $x, $y)" }) // TODO
-          case SmoothCubic(coords) => ??? // TODO
-          case SmoothCubicRel(coords) => ??? // TODO
-          case Quad(coords) => foldCmd[(Coords, Coords)](coords, { case ((x1, y1), (x, y)) => setCoords(x, y); s"path.quadTo($x1, $y1, $x, $y)" }) // TODO
-          case QuadRel(coords) => foldCmd[(Coords, Coords)](coords, { case ((x1, y1), (x, y)) => changeCoords(x, y); s"path.rQuadTo($x1, $y1, $x, $y)" }) // TODO
+          case Cubic(args) => foldCmd[(Coords, Coords, Coords)](args, { case ((x1, y1), (x2, y2), (x, y)) => setCoords(x, y); s"path.cubicTo($x1, $y1, $x2, $y2, $x, $y)" }) // TODO
+          case CubicRel(args) => foldCmd[(Coords, Coords, Coords)](args, { case ((x1, y1), (x2, y2), (x, y)) => changeCoords(x, y); s"path.rCubicTo($x1, $y1, $x2, $y2, $x, $y)" }) // TODO
+          case SmoothCubic(args) => ??? // TODO
+          case SmoothCubicRel(args) => ??? // TODO
+          case Quad(args) => foldCmd[(Coords, Coords)](args, { case ((x1, y1), (x, y)) => setCoords(x, y); s"path.quadTo($x1, $y1, $x, $y)" }) // TODO
+          case QuadRel(args) => foldCmd[(Coords, Coords)](args, { case ((x1, y1), (x, y)) => changeCoords(x, y); s"path.rQuadTo($x1, $y1, $x, $y)" }) // TODO
           case Elliptic(_) => ??? // TODO
           case EllipticRel(_) => ??? // TODO
         })
