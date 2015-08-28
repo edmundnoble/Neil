@@ -23,29 +23,33 @@ abstract class Code {
     count = nameCounts.getOrElse(prefix, 0)
     current = prefix + count
   } yield current
+
 }
 
 object Code {
+  implicit object androidInstances extends AndroidCode.AndroidInstances
+  implicit object iosInstances extends IOSCode.IOSInstances
+  implicit object codeInstances extends CodeInstances
 
   type Named[A] = State[Map[String, Int], A]
-  def empty: Code = new Code {
-    def toAndroidCode = AndroidCode("").pure[Named]
-    def toIOSCode = "".pure[Named]
-  }
-}
 
-object CodeInstances extends Monoid[Code] {
-  override def append(c: Code, l: => Code) = new Code {
-    def toAndroidCode = for {
-      codeC <- c.toAndroidCode
-      codeL <- l.toAndroidCode
-    } yield codeC |+| codeL
-    def toIOSCode = for {
-      codeC <- c.toIOSCode
-      codeL <- l.toIOSCode
-    } yield s"$codeC\n$codeL"
+  val empty: Code = new Code {
+    def toAndroidCode = Monoid[AndroidCode].zero.pure[Named]
+    def toIOSCode = Monoid[IOSCode].zero.pure[Named]
   }
-  override def zero = Code.empty
+  class CodeInstances extends Monoid[Code] {
+    override def append(c: Code, l: => Code) = new Code {
+      def toAndroidCode = for {
+        codeC <- c.toAndroidCode
+        codeL <- l.toAndroidCode
+      } yield codeC |+| codeL
+      def toIOSCode = for {
+        codeC <- c.toIOSCode
+        codeL <- l.toIOSCode
+      } yield codeC |+| codeL
+    }
+    override def zero = Code.empty
+  }
 }
 
 

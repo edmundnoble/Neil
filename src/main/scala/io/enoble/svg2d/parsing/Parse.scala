@@ -34,16 +34,16 @@ object Parse {
     def elemCount = x.foldLeft(Map[T, Int]()) { case (map, key) => map + (key -> (map.getOrElse(key, 0) + 1)) }
   }
 
-  def pathStats(x: xml.Elem): Map[Char, Int] = {
+  def pathStats(elem: xml.Elem): Map[Char, Int] = {
     val pathCommands = foldXml((e: xml.Elem) =>
       if (e.label == "path") e.attribute("d").get.head.text.filter(c => c.isLetter).toVector
       else Vector.empty[Char]
-    )(x)
+    )(elem)
       pathCommands.elemCount
   }
 
-  def attributeStats(x: xml.Elem): Map[String, Int] = {
-    val attrs = foldXml((e: xml.Elem) => e.attributes.asAttrMap.keys.toVector)(x)
+  def attributeStats(elem: xml.Elem): Map[String, Int] = {
+    val attrs = foldXml((e: xml.Elem) => e.attributes.asAttrMap.keys.toVector)(elem)
     attrs.elemCount
   }
 
