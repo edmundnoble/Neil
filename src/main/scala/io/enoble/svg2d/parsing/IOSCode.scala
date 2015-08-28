@@ -46,8 +46,10 @@ object IOSCode {
     }
   }
 
+  val empty: IOSCode = IOSCode(done(makeSwift("")), done(makeObjC("")))
+
   trait IOSInstances extends Monoid[IOSCode] {
-    override def zero: IOSCode = IOSCode(done(makeSwift("")), done(makeObjC("")))
+    override def zero: IOSCode = IOSCode.empty
 
     override def append(first: IOSCode, f2: => IOSCode): IOSCode = {
       lazy val second = f2

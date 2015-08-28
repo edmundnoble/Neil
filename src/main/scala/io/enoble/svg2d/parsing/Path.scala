@@ -58,6 +58,7 @@ object Path {
 
     case class NamedFunction[T, V](f: T => V, name: String) extends (T => V) {
       def apply(t: T) = f(t)
+
       override def toString() = name
     }
 
@@ -96,7 +97,7 @@ object Path {
     val vertLineTo: P[PathCommand] = P((("v" ~ singleLineToArgs) map VerticalLineToRel) | (("V" ~ singleLineToArgs) map VerticalLineTo))
     val quadArgs = P((twoCoordPairs ~ commaWsp.?).rep(1))
     val quad: P[PathCommand] = P((("q" ~ space ~ quadArgs) map QuadRel) | (("Q" ~ space ~ quadArgs) map Quad))
-    val flag: P[Boolean] = CharIn("01").!.map{
+    val flag: P[Boolean] = CharIn("01").!.map {
       case "0" => false
       case "1" => true
     }
@@ -143,7 +144,7 @@ case class Path(commands: Seq[PathCommand]) extends Code {
         yNow = y
       }
       commands.foldLeft("") { (sofar, cmd) =>
-        sofar +|+ (cmd match {
+        AndroidCode.appendAndroid(sofar, cmd match {
           case ClosePath() => "path.close()"
           case MoveTo(coords) => foldCmd[Coords](coords, { case (x, y) => setCoords(x, y); s"path.moveTo($x, $y)" })
           case MoveToRel(coords) => foldCmd[Coords](coords, { case (x, y) => changeCoords(x, y); s"path.rMoveTo($x, $y)" })
@@ -165,12 +166,20 @@ case class Path(commands: Seq[PathCommand]) extends Code {
             xNow += x
             s"path.rLineTo($x, 0)"
           })
-          case Cubic(args) => foldCmd[(Coords, Coords, Coords)](args, { case ((x1, y1), (x2, y2), (x, y)) => setCoords(x, y); s"path.cubicTo($x1, $y1, $x2, $y2, $x, $y)" }) // TODO
-          case CubicRel(args) => foldCmd[(Coords, Coords, Coords)](args, { case ((x1, y1), (x2, y2), (x, y)) => changeCoords(x, y); s"path.rCubicTo($x1, $y1, $x2, $y2, $x, $y)" }) // TODO
+          case Cubic(args) => foldCmd[(Coords, Coords, Coords)](args, { case ((x1, y1), (x2, y2), (x, y)) =>
+            setCoords(x, y); s"path.cubicTo($x1, $y1, $x2, $y2, $x, $y)"
+          })
+          case CubicRel(args) => foldCmd[(Coords, Coords, Coords)](args, { case ((x1, y1), (x2, y2), (x, y)) =>
+            changeCoords(x, y); s"path.rCubicTo($x1, $y1, $x2, $y2, $x, $y)"
+          })
           case SmoothCubic(args) => ??? // TODO
           case SmoothCubicRel(args) => ??? // TODO
-          case Quad(args) => foldCmd[(Coords, Coords)](args, { case ((x1, y1), (x, y)) => setCoords(x, y); s"path.quadTo($x1, $y1, $x, $y)" }) // TODO
-          case QuadRel(args) => foldCmd[(Coords, Coords)](args, { case ((x1, y1), (x, y)) => changeCoords(x, y); s"path.rQuadTo($x1, $y1, $x, $y)" }) // TODO
+          case Quad(args) => foldCmd[(Coords, Coords)](args, { case ((x1, y1), (x, y)) =>
+            setCoords(x, y); s"path.quadTo($x1, $y1, $x, $y)"
+          })
+          case QuadRel(args) => foldCmd[(Coords, Coords)](args, { case ((x1, y1), (x, y)) =>
+            changeCoords(x, y); s"path.rQuadTo($x1, $y1, $x, $y)"
+          })
           case Elliptic(_) => ??? // TODO
           case EllipticRel(_) => ??? // TODO
         })
@@ -180,12 +189,7 @@ case class Path(commands: Seq[PathCommand]) extends Code {
     "}"
     ).pure[Named]
 
-  def foldCmd[T](s: Seq[T], f: T => String): String = s.map(f) match {
-    case x if x.isEmpty => ""
-    case xs => xs.reduce(_ +|+ _)
-  }
+  def foldCmd[T](s: Seq[T], f: T => String): String = s.foldLeft("")((a, b) => AndroidCode.appendAndroid(a, f(b)))
 
-  override def toIOSCode: Named[IOSCode] = {
-    "".pure[Named]
-  }
+  override def toIOSCode: Named[IOSCode] = ???
 }

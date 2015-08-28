@@ -5,21 +5,21 @@ import Scalaz._
 
 object AndroidCode {
 
-  implicit class CodeBuildingOps(val str: String) extends AnyVal {
-    def +|+(other: String) = if (other.trim.length == 0 || str.trim.length == 0) str + "\n" + other else str + ";\n" + other
-  }
+  def appendAndroid(str: String, other: String): String =
+    if (other.trim.length == 0 || str.trim.length == 0) str + "\n" + other
+    else str + ";\n" + other
 
   trait AndroidInstances extends Monoid[AndroidCode] {
     override def zero: AndroidCode = AndroidCode("")
 
-    override def append(f1: AndroidCode, f2: => AndroidCode): AndroidCode = AndroidCode(f1.unsafe +|+ f2.unsafe)
+    override def append(f1: AndroidCode, f2: => AndroidCode): AndroidCode = AndroidCode(appendAndroid(f1.unsafe, f2.unsafe))
   }
 
-  def apply(strs: String*): AndroidCode = AndroidCode(strs.reduce(_ +|+ _))
+  def apply(strs: String*): AndroidCode = AndroidCode(strs.reduce(appendAndroid))
 }
 
-case class AndroidCode(unsafe: String) extends AnyVal {
+case class AndroidCode(private val unsafe: String) extends AnyVal {
   import AndroidCode._
 
-  def asString: String = unsafe +|+ ";\n"
+  def asString: String = unsafe + ";\n"
 }

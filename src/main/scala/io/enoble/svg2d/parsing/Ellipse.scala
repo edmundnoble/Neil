@@ -31,8 +31,7 @@ case class DrawEllipse(x: Double, y: Double, rx: Double, ry: Double) extends Cod
   def top = y + (ry / 2)
   def right = x + (rx / 2)
   def bottom = y - (ry / 2)
-  override lazy val toAndroidCode: Named[AndroidCode] =
-    AndroidCode(s"RectF bounds = new RectF($left, $top, $right, $bottom)", "c.drawOval(bounds, p)")
-      .pure[Named]
-  override lazy val toIOSCode: Named[IOSCode] = "".pure[Named]
+  override def toAndroidCode: Named[AndroidCode] =
+    AndroidCode(s"RectF bounds = new RectF($left, $top, $right, $bottom)", "c.drawOval(bounds, p)").pure[Named]
+  override def toIOSCode: Named[IOSCode] = ???
 }

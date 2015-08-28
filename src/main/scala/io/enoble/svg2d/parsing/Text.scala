@@ -21,5 +21,5 @@ object Text extends Model {
 case class DrawText(text: String, posX: Double, posY: Double) extends Code {
   override def toAndroidCode: Named[AndroidCode] = AndroidCode(s"c.drawText($text, $posX, $posY, p)").pure[Named]
 
-  override def toIOSCode: Named[IOSCode] = "".pure[Named]
+  override def toIOSCode: Named[IOSCode] = ???
 }

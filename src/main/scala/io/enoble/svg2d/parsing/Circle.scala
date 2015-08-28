@@ -27,5 +27,5 @@ object CircleParser extends Model {
 
 case class DrawCircle(x: Double, y: Double, r: Double) extends Code {
   override def toAndroidCode: Named[AndroidCode] = AndroidCode(s"c.drawCircle($x, $y, $r, p);").pure[Named]
-  override def toIOSCode: Named[IOSCode] = s"".pure[Named]
+  override def toIOSCode: Named[IOSCode] = ???
 }
