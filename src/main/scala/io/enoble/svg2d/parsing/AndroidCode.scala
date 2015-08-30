@@ -9,8 +9,10 @@ object AndroidCode {
     if (other.trim.length == 0 || str.trim.length == 0) str + "\n" + other
     else str + ";\n" + other
 
+  def empty = AndroidCode("")
+
   trait AndroidInstances extends Monoid[AndroidCode] {
-    override def zero: AndroidCode = AndroidCode("")
+    override def zero: AndroidCode = AndroidCode.empty
 
     override def append(f1: AndroidCode, f2: => AndroidCode): AndroidCode = AndroidCode(appendAndroid(f1.unsafe, f2.unsafe))
   }

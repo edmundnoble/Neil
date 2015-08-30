@@ -8,6 +8,10 @@ libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % "1.0.4"
 
 libraryDependencies += "com.lihaoyi" %% "fastparse" % "0.2.1"
 
+libraryDependencies += "com.github.scopt" %% "scopt" % "3.3.0"
+
+resolvers += Resolver.sonatypeRepo("public")
+
 javacOptions += "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
 
 fork in test := true

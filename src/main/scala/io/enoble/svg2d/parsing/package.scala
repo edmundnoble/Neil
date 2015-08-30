@@ -6,7 +6,7 @@ import Scalaz._
 
 package object parsing {
 
-  type Model = PartialFunction[xml.Elem, Option[Code]]
+  type Model = PartialFunction[xml.Elem, Option[Vector[Code]]]
   type ParseError = Exception
   implicit class HasAttributes(val x: xml.Elem) extends AnyVal {
     def getOrDefault(n: String, default: String): String = x.attribute(n).map(_.head.text).getOrElse(default)

@@ -7,7 +7,7 @@ import scalaz._
 import Scalaz._
 
 object Parse {
-  def foldXml[A, B](f: (xml.Elem) => B)(x: xml.Elem)(implicit M: Monoid[B]): B = {
+  def foldXml[B](f: (xml.Elem) => B)(x: xml.Elem)(implicit M: Monoid[B]): B = {
     def inner(x: xml.Node): Trampoline[B] = {
       val res = x match {
         case x1: Elem =>
@@ -26,6 +26,22 @@ object Parse {
     inner(x).run
   }
 
+  def parseTree[A: Monoid](f: xml.Elem => Option[A])(x: xml.Elem): Option[A] = {
+    f(x).orElse {
+      x.child match {
+        case xs if xs.isEmpty => Monoid[A].zero.some
+        case xs =>
+          xs.foldLeft(Monoid[A].zero.some) { (res1, res2) =>
+            val second = res2 match {
+              case x1: Elem => parseTree(f)(x1)
+              case _ => Monoid[A].zero.some
+            }
+            (res1 |@| second)(Monoid[A].append(_, _))
+          }
+      }
+    }
+  }
+
   def elementStats(x: xml.Elem): Map[String, Int] = {
     foldXml((e: xml.Elem) => Vector(e.label))(x).elemCount
   }
@@ -39,7 +55,7 @@ object Parse {
       if (e.label == "path") e.attribute("d").get.head.text.filter(c => c.isLetter).toVector
       else Vector.empty[Char]
     )(elem)
-      pathCommands.elemCount
+    pathCommands.elemCount
   }
 
   def attributeStats(elem: xml.Elem): Map[String, Int] = {
@@ -47,7 +63,10 @@ object Parse {
     attrs.elemCount
   }
 
-  def parseAll: xml.Elem => Option[Code] = foldXml(parseDrawable)
+  def parseAll: xml.Elem => Option[Vector[Code]] = parseTree(parseDrawable)
 
-  def parseDrawable: xml.Elem => Option[Code] = parsers.reduce(_ orElse _) makeTotal (_ => Some(Code.empty))
+  def parseDrawable: xml.Elem => Option[Vector[Code]] = parsers.reduce(_ orElse _) makeTotal { unrec =>
+    println(s"Unrecognized element: ${unrec.label}")
+    None
+  }
 }

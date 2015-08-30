@@ -16,12 +16,12 @@ object PathParser extends Model {
 
   override def isDefinedAt(x: Elem): Boolean = x.label =~= "path"
 
-  override def apply(v1: Elem): Option[Code] = {
+  override def apply(v1: Elem): Option[Vector[Code]] = {
     val pathCoords = v1.getOpt("d")
     val parsedPath: Option[Result[Path]] = pathCoords.map(s => Path.Parsers.path.parse(s))
     if (parsedPath.isEmpty) System.err.println("No 'd' attribute found in path element")
     parsedPath.flatMap {
-      case Success(path, _) => Some(path)
+      case Success(path, _) => Some(Vector(path))
       case x@Failure(e, _) => System.err.println(s"Failed to parse path: ${pathCoords.get}"); None
     }
   }

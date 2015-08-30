@@ -21,7 +21,8 @@ object Timed {
     println(s"Result: $parsed")
     println(s"Time taken: ${(timeAfter - time) / 1000000.0} milliseconds")
     time = System.nanoTime
-    val code = parsed.map(_.toAndroidCode.run(Map[String, Int]())._2.asString)
+    val code = "" // TODO:
+    // parsed.map(_.toAndroidCode.run(Map[String, Int]())._2.asString)
     timeAfter = System.nanoTime
     println(s"Time taken to generate code: ${(timeAfter - time) / 1000000.0} milliseconds")
 

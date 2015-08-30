@@ -23,7 +23,7 @@ object InkscapeSVGConverter {
     }
     val outSvgFolder = new File(outSvgFolderName)
     val files = inSvgFolder.listFiles(fileFilter)
-    files.par.map(prc).foreach(_.!!)
+    files.map(prc).foreach(_.!!)
   }
 
 }

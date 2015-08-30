@@ -9,20 +9,20 @@ import Scalaz._
 
 object EllipseParser extends Model {
   override def isDefinedAt(x: Elem): Boolean = x.label =~= "ellipse"
-  override def apply(v1: Elem): Option[Code] = {
+  override def apply(v1: Elem): Option[Vector[Code]] = {
     val centerX = v1.getOrDefault("cx", "0")
     val centerY = v1.getOrDefault("cy", "0")
     val radiusX = v1.getOrDefault("rx", "0")
     val radiusY = v1.getOrDefault("ry", "0")
     if (radiusX == "0" && radiusY == "0") {
-      Some(Code.empty)
+      Some(Vector.empty[Code])
     } else {
       for {
         x <- centerX.asDouble if x >= 0
         y <- centerY.asDouble if y >= 0
         rx <- radiusX.asDouble
         ry <- radiusY.asDouble
-      } yield DrawEllipse(x, y, rx, ry)
+      } yield Vector(DrawEllipse(x, y, rx, ry))
     }
   }
 }
