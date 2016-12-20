@@ -20,20 +20,22 @@ object Main {
   case object Android extends OutputType
   case object Raw extends OutputType
 
-  def parseOutputType(str: String): OutputType = str match {
-    case "s" | "swift" => Swift
-    case "c" | "objc" | "objectivec" => ObjectiveC
-    case "a" | "android" | "j" | "java" => Android
-    case "r" | "raw" => Raw
-    case _ => throw new IllegalArgumentException(s"$str is not a valid output type: try 's', 'c', 'a', or 'r'")
-  }
+  val outputTypeMapping: Map[String, Main.OutputType] = List(
+    List("s", "swift") -> Swift,
+    List("c", "objc", "objectivec") -> ObjectiveC,
+    List("a", "android", "j", "java") -> Android,
+    List("r", "raw") -> Raw
+  ).flatMap(p => p._1.map(_ -> p._2))(collection.breakOut)
+
+  def parseOutputType(str: String): OutputType =
+    outputTypeMapping.getOrElse(str, throw new IllegalArgumentException(s"$str is not a valid output type: try 's', 'c', 'a', or 'r'"))
 
   case class MainConfig(outputType: OutputType = null, inputFolder: File = null, outputFolder: Option[File] = None)
 
   implicit val outputTypeInstances: Read[OutputType] = Read.reads(parseOutputType)
 
   val parser = new scopt.OptionParser[MainConfig]("neil") {
-      head("neil", "0.x")
+      head("neil", "0.0.1")
       opt[OutputType]('t', "otype") required() valueName "<outputType>" action { (x, c) =>
         c.copy(outputType = x)
       } text "output type; valid output types are 's' (Swift), 'c' (Objective C), 'a' (Android), and 'r' (Raw)"
