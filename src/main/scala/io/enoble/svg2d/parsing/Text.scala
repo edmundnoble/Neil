@@ -8,7 +8,7 @@ import scalaz._
 import Scalaz._
 
 object Text extends Model {
-  override def isDefinedAt(x: Elem): Boolean = x.label =~= "text"
+  override def isDefinedAt(x: Elem): Boolean = x.label ~= "text"
   override def apply(v1: Elem): Option[Vector[Code]] = {
     for {
       posX <- v1.getOpt("x").flatMap(_.asDouble)

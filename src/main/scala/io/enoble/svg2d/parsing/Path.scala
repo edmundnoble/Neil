@@ -14,7 +14,7 @@ object PathParser extends Model {
   import fastparse.core._
   import fastparse.core.Result._
 
-  override def isDefinedAt(x: Elem): Boolean = x.label =~= "path"
+  override def isDefinedAt(x: Elem): Boolean = x.label ~= "path"
 
   override def apply(v1: Elem): Option[Vector[Code]] = {
     val pathCoords = v1.getOpt("d")

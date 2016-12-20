@@ -13,7 +13,7 @@ package object parsing {
     def getOpt(n: String): Option[String] = x.attribute(n).map(_.head.text)
   }
   implicit class CaseInsensitiveEquals(val s: String) extends AnyVal {
-    def =~=(other: String) = other.equalsIgnoreCase(s)
+    def ~=(other: String) = other.equalsIgnoreCase(s)
   }
   implicit class ParseDouble(val s: String) extends AnyVal {
     def asDouble = s.parseDouble.toOption

@@ -8,7 +8,7 @@ import scalaz._
 import Scalaz._
 
 object CircleParser extends Model {
-  override def isDefinedAt(x: Elem): Boolean = x.label =~= "circle"
+  override def isDefinedAt(x: Elem): Boolean = x.label ~= "circle"
   override def apply(v1: Elem): Option[Vector[Code]] = {
     val centerX = v1.getOrDefault("cx", "0")
     val centerY = v1.getOrDefault("cy", "0")
