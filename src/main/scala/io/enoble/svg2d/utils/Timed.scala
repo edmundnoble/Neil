@@ -3,6 +3,7 @@ package io.enoble.svg2d.utils
 import java.io.File
 
 import io.enoble.svg2d.parsing.Parse
+import io.enoble.svg2d.render.InitialRenderer
 
 import scalaz._
 import Scalaz._
@@ -16,7 +17,7 @@ object Timed {
     }
     val xml = scala.xml.XML.loadFile(new File(args(0)))
     var time = System.nanoTime
-    val parsed = Parse.parseAll(xml)
+    val parsed = Parse.parseAll(InitialRenderer)(xml)
     var timeAfter = System.nanoTime
     println(s"Result: $parsed")
     println(s"Time taken: ${(timeAfter - time) / 1000000.0} milliseconds")

@@ -1,5 +1,7 @@
 package io.enoble.svg2d.parsing
 
+import io.enoble.svg2d.ast.FinalSVG
+
 import scala.language.higherKinds
 import scala.xml.Elem
 import scalaz.Free.Trampoline
@@ -26,17 +28,17 @@ object Parse {
     inner(x).run
   }
 
-  def parseTree[A: Monoid](f: xml.Elem => Option[A])(x: xml.Elem): Option[A] = {
+  def parseTree[A](svg: FinalSVG[A], f: xml.Elem => Option[Option[A]])(x: xml.Elem): Option[Option[A]] = {
     f(x).orElse {
       x.child match {
-        case xs if xs.isEmpty => Monoid[A].zero.some
+        case xs if xs.isEmpty => Some(None)
         case xs =>
-          xs.foldLeft(Monoid[A].zero.some) { (res1, res2) =>
+          xs.foldLeft[Option[Option[A]]](Some(None)) { (res1, res2) =>
             val second = res2 match {
-              case x1: Elem => parseTree(f)(x1)
-              case _ => Monoid[A].zero.some
+              case x1: Elem => parseTree(svg, f)(x1)
+              case _ => Some(None)
             }
-            (res1 |@| second)(Monoid[A].append(_, _))
+            (res1 |@| second){(a, va) => implicit val sem = svg.monoid[A]; a |+| va}
           }
       }
     }
@@ -47,7 +49,8 @@ object Parse {
   }
 
   implicit class ElemCountOps[T](val x: Seq[T]) {
-    def elemCount = x.foldLeft(Map[T, Int]()) { case (map, key) => map + (key -> (map.getOrElse(key, 0) + 1)) }
+    def elemCount: Map[T, Int] =
+      x.foldLeft(Map[T, Int]()) { case (map, key) => map + (key -> (map.getOrElse(key, 0) + 1)) }
   }
 
   def pathStats(elem: xml.Elem): Map[Char, Int] = {
@@ -63,10 +66,16 @@ object Parse {
     attrs.elemCount
   }
 
-  def parseAll: xml.Elem => Option[Vector[Code]] = parseTree(parseDrawable)
+  def parseAll[A](svg: FinalSVG[A]): xml.Elem => Option[Option[A]] =
+    parseTree[A](svg, parseDrawable[A](svg))
 
-  def parseDrawable: xml.Elem => Option[Vector[Code]] = parsers.reduce(_ orElse _) makeTotal { unrec =>
-    println(s"Unrecognized element: ${unrec.label}")
+  def parseDrawable[A](svg: FinalSVG[A]): xml.Elem => Option[Option[A]] = elem => parsers.reduce((p1, p2) => new Model {
+    def apply[R](elem: xml.Elem, svg: FinalSVG[R]): Option[Option[R]] = p1(elem, svg) orElse p2(elem, svg)
+  }).apply(elem, svg).orElse {
+    println(s"Unrecognized element: ${elem.label}")
     None
   }
+
+  val parsers: List[Model] =
+    List(Circle, Ellipse, Text, PathParser, RectParser)
 }

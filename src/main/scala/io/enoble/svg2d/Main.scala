@@ -4,13 +4,15 @@ import java.io.File
 import java.nio.file.{Files, Paths}
 import java.text.DecimalFormat
 
-import io.enoble.svg2d.parsing.{CodeGenerator, Parse}
+import io.enoble.svg2d.ast.FinalSVG
+import io.enoble.svg2d.data.{AndroidCode, ObjectiveCCode, Renderable, SwiftCode}
+import io.enoble.svg2d.parsing.Parse
+import io.enoble.svg2d.render._
 import scopt.Read
 
 import scalaz._
 import Scalaz._
 import scala.io.Source
-
 import scala.collection.JavaConverters._
 
 object Main {
@@ -50,11 +52,17 @@ object Main {
     val configParsed = parser.parse(args, MainConfig())
     configParsed.foreach { config =>
       val filePath = config.inputFolder
+      val renderer: FinalSVG[Renderable] = config.outputType match {
+        case Swift => SwiftRenderer
+        case ObjectiveC => ObjectiveCRenderer
+        case Android => AndroidRenderer
+        case Raw => InitialRenderer
+      }
       val isDir = filePath.isDirectory
       if (isDir) {
         val svgFiles = filePath.listFiles()
         val xmlFiles = svgFiles.map(f => xml.XML.loadFile(f))
-        val parsed = xmlFiles.map(Parse.parseAll)
+        val parsed = xmlFiles.map(Parse.parseAll(renderer))
         val (successes, failures) = parsed.partition(_.isDefined)
         val successCount = successes.length
         val failureCount = failures.length
@@ -67,17 +75,11 @@ object Main {
         println(parsed.toVector)
       } else {
         val xml = scala.xml.XML.loadFile(filePath)
-        val parsed = Parse.parseAll(xml)
+        val parsed = Parse.parseAll(renderer)(xml)
         parsed.fold {
           println("Parsing failed!")
         } { codes =>
-          val output = config.outputType match {
-            case Swift => CodeGenerator.generateSwiftCode(codes)
-            case ObjectiveC => CodeGenerator.generateObjCCode(codes)
-            case Android => CodeGenerator.generateAndroidCode(codes)
-            case Raw => codes
-          }
-          println(output)
+          codes.suml(renderer.monoid[Renderable]).asString
         }
       }
     }

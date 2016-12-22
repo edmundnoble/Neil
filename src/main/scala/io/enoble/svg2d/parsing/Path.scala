@@ -1,65 +1,59 @@
 package io.enoble.svg2d.parsing
 
-import io.enoble.svg2d.parsing.Code.Named
-import io.enoble.svg2d.parsing.Path.PathCommand
+import fastparse.Implicits.Repeater
+import fastparse.Implicits.Repeater.UnitRepeater
+import io.enoble.svg2d.ast._
 
-import scalaz._
-import Scalaz._
-import scalaz.std.list._
+import scala.collection.immutable.VectorBuilder
+import scala.collection.mutable
+
+import scalaz.std.vector._
+import scalaz.syntax.foldable._
 
 object PathParser extends Model {
 
-  import Path._
-  import xml.Elem
-  import fastparse.core._
   import fastparse.core.Result._
+  import fastparse.core._
 
-  override def isDefinedAt(x: Elem): Boolean = x.label ~= "path"
+  import xml.Elem
 
-  override def apply(v1: Elem): Option[Vector[Code]] = {
-    val pathCoords = v1.getOpt("d")
-    val parsedPath: Option[Result[Path]] = pathCoords.map(s => Path.Parsers.path.parse(s))
-    if (parsedPath.isEmpty) System.err.println("No 'd' attribute found in path element")
-    parsedPath.flatMap {
-      case Success(path, _) => Some(Vector(path))
-      case x@Failure(e, _) => System.err.println(s"Failed to parse path: ${pathCoords.get}"); None
+  override def apply[A](v1: Elem, svg: FinalSVG[A]): Option[Option[A]] =
+    if (v1.label ~= "path") {
+      val pathCoords = v1.getOpt("d")
+      val parsedPath: Option[Result[svg.Paths]] = pathCoords.map(s => new Path.Parsers[svg.Paths](svg.path).path.parse(s))
+      if (parsedPath.isEmpty) System.err.println("No 'd' attribute found in path element")
+      parsedPath.flatMap {
+        case Success(path, _) => Some(Some(svg.path(path)))
+        case _: Failure =>
+          System.err.println(s"Failed to parse path: ${pathCoords.get}")
+          None
+      }
+    } else {
+      None
     }
-  }
 }
 
 object Path {
-  type Coords = (Double, Double)
-  sealed trait PathCommand
-  case class ClosePath() extends PathCommand
-  case class MoveTo(points: Seq[Coords]) extends PathCommand
-  case class MoveToRel(points: Seq[Coords]) extends PathCommand
-  case class LineTo(points: Seq[Coords]) extends PathCommand
-  case class LineToRel(point: Seq[Coords]) extends PathCommand
-  case class VerticalLineTo(y: Seq[Double]) extends PathCommand
-  case class VerticalLineToRel(y: Seq[Double]) extends PathCommand
-  case class HorizLineTo(x: Seq[Double]) extends PathCommand
-  case class HorizLineToRel(x: Seq[Double]) extends PathCommand
-  case class Cubic(params: Seq[(Coords, Coords, Coords)]) extends PathCommand
-  case class CubicRel(params: Seq[(Coords, Coords, Coords)]) extends PathCommand
-  case class SmoothCubic(params: Seq[(Coords, Coords, Coords)]) extends PathCommand
-  case class SmoothCubicRel(params: Seq[(Coords, Coords, Coords)]) extends PathCommand
-  case class Quad(params: Seq[(Coords, Coords)]) extends PathCommand
-  case class QuadRel(params: Seq[(Coords, Coords)]) extends PathCommand
-  case class EllipticParam(r: Coords, rotX: Double, largeArc: Boolean, sweep: Boolean, p: Coords)
-  case class Elliptic(params: Seq[EllipticParam]) extends PathCommand
-  case class EllipticRel(params: Seq[EllipticParam]) extends PathCommand
 
-  object Parsers {
+  class Parsers[A](pathCtx: FinalPath[A]) {
+
+    type Coords = (Double, Double)
 
     import fastparse.all._
 
     import scala.language.implicitConversions
-    import scalaz.std.list._
 
     case class NamedFunction[T, V](f: T => V, name: String) extends (T => V) {
       def apply(t: T) = f(t)
 
       override def toString() = name
+    }
+
+    implicit def vectorRepeater[R] = new Repeater[R, Vector[R]] {
+      override type Acc = mutable.Builder[R, Vector[R]]
+      override def initial: Acc = Vector.newBuilder[R]
+      override def accumulate(t: R, acc: Acc): Unit = acc += t
+      override def result(acc: Acc): Vector[R] = acc.result()
     }
 
     // Here is the parser
@@ -89,107 +83,34 @@ object Path {
     val wspAndCoord: P[Coords] = P(commaWsp ~ coordPair)
     // TODO: All of the extra arguments to moveTo should be interpreted as lineTo's, according to the spec
     val moveToArgs = P(wspAndCoord.rep(1))
-    val moveTo: P[PathCommand] = P(("m" ~ moveToArgs map MoveToRel) | ("M" ~ moveToArgs map MoveTo))
+    val moveTo: P[A] = P(("m" ~ moveToArgs map pathCtx.moveToRel) | ("M" ~ moveToArgs map pathCtx.moveTo))
     val lineToArgs = P(moveToArgs)
-    val lineTo: P[PathCommand] = P(("L" ~ lineToArgs map LineTo) | ("l" ~ lineToArgs map LineToRel))
+    val lineTo: P[A] = P(("L" ~ lineToArgs map pathCtx.lineTo) | ("l" ~ lineToArgs map pathCtx.lineToRel))
     val singleLineToArgs = P((wspDouble ~ commaWsp).rep(1))
-    val horizLineTo: P[PathCommand] = P((("h" ~ singleLineToArgs) map HorizLineToRel) | (("H" ~ singleLineToArgs) map HorizLineTo))
-    val vertLineTo: P[PathCommand] = P((("v" ~ singleLineToArgs) map VerticalLineToRel) | (("V" ~ singleLineToArgs) map VerticalLineTo))
+    val horizLineTo: P[A] = P((("h" ~ singleLineToArgs) map pathCtx.horizLineToRel) | (("H" ~ singleLineToArgs) map pathCtx.horizLineTo))
+    val vertLineTo: P[A] = P((("v" ~ singleLineToArgs) map pathCtx.verticalLineToRel) | (("V" ~ singleLineToArgs) map pathCtx.verticalLineTo))
     val quadArgs = P((twoCoordPairs ~ commaWsp.?).rep(1))
-    val quad: P[PathCommand] = P((("q" ~ space ~ quadArgs) map QuadRel) | (("Q" ~ space ~ quadArgs) map Quad))
+    val quad: P[A] = P((("q" ~ space ~ quadArgs) map pathCtx.quadRel) | (("Q" ~ space ~ quadArgs) map pathCtx.quad))
     val flag: P[Boolean] = CharIn("01").!.map {
       case "0" => false
       case "1" => true
     }
-    val ellipticParam: P[EllipticParam] = (number ~ commaWsp ~ number ~ commaWsp ~ number ~ commaWsp ~ flag ~ commaWsp ~ flag ~ commaWsp ~ coordPair) map {
-      case (x, y, z, f, f2, coords) => EllipticParam((x, y), z, f, f2, coords)
-    }
-    val ellipticArgs: P[Seq[EllipticParam]] = P((ellipticParam ~ commaWsp).rep(1))
-    val ellipticalArc: P[PathCommand] = P(("a" ~ space ~ ellipticArgs map EllipticRel) | ("A" ~ space ~ ellipticArgs map Elliptic))
+    val ellipticParam: P[EllipticParam] =
+      (number ~ commaWsp ~ number ~ commaWsp ~ number ~ commaWsp ~ flag ~ commaWsp ~ flag ~ commaWsp ~ coordPair) map {
+        case (x, y, z, f, f2, coords) => EllipticParam((x, y), z, f, f2, coords)
+      }
+    val ellipticArgs: P[Vector[EllipticParam]] = P((ellipticParam ~ commaWsp).rep(1))
+    val ellipticalArc: P[A] = P(("a" ~ space ~ ellipticArgs map pathCtx.ellipticRel) | ("A" ~ space ~ ellipticArgs map pathCtx.elliptic))
     val cubicArgs = P((threeCoordPairs ~ commaWsp).rep(1))
-    val cubic: Parser[PathCommand] = P(("c" ~ space ~ cubicArgs map CubicRel) | ("C" ~ space ~ cubicArgs map Cubic))
-    val smoothCubic: Parser[PathCommand] = P(("s" ~ cubicArgs map SmoothCubicRel) | ("S" ~ cubicArgs map SmoothCubic))
-    val closePath: Parser[PathCommand] = P(CharIn("zZ") map (_ => ClosePath()))
-    val command: Parser[PathCommand] = P(closePath | lineTo | horizLineTo | vertLineTo | cubic | smoothCubic | quad | ellipticalArc)
-    val pathCommands: Parser[Seq[(PathCommand, Seq[PathCommand])]] = P(((moveTo ~ space) ~ (command ~ space).rep ~ space).rep(1))
-    val path: Parser[Path] = P(pathCommands.map(seq => Path(seq.flatMap { case (m: PathCommand, c: Seq[PathCommand]) => m +: c })))
+    val cubic: Parser[A] = P(("c" ~ space ~ cubicArgs map pathCtx.cubicRel) | ("C" ~ space ~ cubicArgs map pathCtx.cubic))
+    val smoothCubic: Parser[A] = P(("s" ~ cubicArgs map pathCtx.smoothCubicRel) | ("S" ~ cubicArgs map pathCtx.smoothCubic))
+    val closePath: Parser[A] = P(CharIn("zZ") map (_ => pathCtx.closePath()))
+    val command: Parser[A] = P(closePath | lineTo | horizLineTo | vertLineTo | cubic | smoothCubic | quad | ellipticalArc)
+    val pathCommands: Parser[Vector[(A, Vector[A])]] = P(((moveTo ~ space) ~ (command ~ space).rep ~ space).rep(1))
+    val path: Parser[A] = P(pathCommands.map(
+      _.foldMap {
+        case (m, c) => pathCtx.monoid.append(m, c.suml(pathCtx.monoid))
+      }(pathCtx.monoid)))
   }
 
-}
-
-
-case class Path(commands: Seq[PathCommand]) extends Code {
-
-  import Path._
-  import scalaz._
-  import Scalaz._
-
-  def trackCoords(x: Double, y: Double): String =
-    s"""
-      x = $x;
-      x = $y;
-     """
-
-  override def toAndroidCode: Named[AndroidCode] =
-    AndroidCode("{\n" +
-      "Path path = new Path()", {
-      var xNow = 0.0
-      var yNow = 0.0
-      def changeCoords(dx: Double, dy: Double) = {
-        xNow += dx
-        yNow += dy
-      }
-      def setCoords(x: Double, y: Double) = {
-        xNow = x
-        yNow = y
-      }
-      commands.foldLeft("") { (sofar, cmd) =>
-        AndroidCode.appendAndroid(sofar, cmd match {
-          case ClosePath() => "path.close()"
-          case MoveTo(coords) => foldCmd[Coords](coords, { case (x, y) => setCoords(x, y); s"path.moveTo($x, $y)" })
-          case MoveToRel(coords) => foldCmd[Coords](coords, { case (x, y) => changeCoords(x, y); s"path.rMoveTo($x, $y)" })
-          case LineTo(coords) => foldCmd[Coords](coords, { case (x, y) => setCoords(x, y); s"path.lineTo($x, $y)" })
-          case LineToRel(coords) => foldCmd[Coords](coords, { case (x, y) => changeCoords(x, y); s"path.rLineTo($x, $y)" })
-          case VerticalLineTo(coords) => foldCmd[Double](coords, y => {
-            yNow = y
-            s"path.lineTo($xNow, $y)"
-          })
-          case VerticalLineToRel(coords) => foldCmd[Double](coords, y => {
-            yNow += y
-            s"path.rLineTo(0, $y)"
-          })
-          case HorizLineTo(coords) => foldCmd[Double](coords, x => {
-            xNow = x
-            s"path.lineTo($x, $yNow)"
-          })
-          case HorizLineToRel(coords) => foldCmd[Double](coords, x => {
-            xNow += x
-            s"path.rLineTo($x, 0)"
-          })
-          case Cubic(args) => foldCmd[(Coords, Coords, Coords)](args, { case ((x1, y1), (x2, y2), (x, y)) =>
-            setCoords(x, y); s"path.cubicTo($x1, $y1, $x2, $y2, $x, $y)"
-          })
-          case CubicRel(args) => foldCmd[(Coords, Coords, Coords)](args, { case ((x1, y1), (x2, y2), (x, y)) =>
-            changeCoords(x, y); s"path.rCubicTo($x1, $y1, $x2, $y2, $x, $y)"
-          })
-          case SmoothCubic(args) => ??? // TODO
-          case SmoothCubicRel(args) => ??? // TODO
-          case Quad(args) => foldCmd[(Coords, Coords)](args, { case ((x1, y1), (x, y)) =>
-            setCoords(x, y); s"path.quadTo($x1, $y1, $x, $y)"
-          })
-          case QuadRel(args) => foldCmd[(Coords, Coords)](args, { case ((x1, y1), (x, y)) =>
-            changeCoords(x, y); s"path.rQuadTo($x1, $y1, $x, $y)"
-          })
-          case Elliptic(_) => ??? // TODO
-          case EllipticRel(_) => ??? // TODO
-        })
-      }
-    }
-    ,
-    "}"
-    ).pure[Named]
-
-  def foldCmd[T](s: Seq[T], f: T => String): String = s.foldLeft("")((a, b) => AndroidCode.appendAndroid(a, f(b)))
-
-  override def toIOSCode: Named[IOSCode] = ???
 }
