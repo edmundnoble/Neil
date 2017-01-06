@@ -22,6 +22,7 @@ object InkscapeSVGConverter {
       override def accept(pathname: File): Boolean = pathname.getName.endsWith(".svg")
     }
     val outSvgFolder = new File(outSvgFolderName)
+    outSvgFolder.mkdirs()
     val files = inSvgFolder.listFiles(fileFilter)
     files.map(prc).foreach(_.!!)
   }
