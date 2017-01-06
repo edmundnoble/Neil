@@ -73,15 +73,16 @@ object Main {
         println(f"Success rate: $successRate%2.2f%%")
         val failedFiles = parsed.zipWithIndex.map(x => (x._1, svgFiles(x._2))).filter(_._1.isEmpty).map(_._2.getName)
         println(s"Failed files: \n${failedFiles.mkString("\n")}")
-        println(parsed.toVector)
+        val stringVector = parsed.map(_.map(_.map(_.asString))).toVector
+        println(stringVector)
       } else {
         val xml = scala.xml.XML.loadFile(filePath)
         val parsed = Parse.parseAll(renderer)(xml)
-        parsed.fold {
-          println("Parsing failed!")
+        println(parsed.fold {
+          "Parsing failed!"
         } { codes =>
-          codes.foldLeft(renderer.empty)(renderer.append).asString
-        }
+          codes.map(_.asString).toString
+        })
       }
     }
   }
