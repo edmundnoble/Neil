@@ -9,21 +9,21 @@ import scalaz._
 import Scalaz._
 
 object Parse {
-  def foldXml[B](f: (xml.Elem) => B)(x: xml.Elem)(implicit M: Monoid[B]): B = {
+  def foldXml[B](f: (xml.Elem) => B)(x: xml.Elem)(z: B, app: (B, B) => B): B = {
     def inner(x: xml.Node): Trampoline[B] = {
       val res = x match {
         case x1: Elem =>
           f(x1)
         case _ =>
-          M.zero
+          z
       }
-      val tramp = x.child.foldLeft(Trampoline.delay(M.zero)) { (acc, x) =>
+      val tramp = x.child.foldLeft(Trampoline.delay(z)) { (acc, x) =>
         for {
           rep <- Trampoline.suspend(inner(x))
           prev <- acc
-        } yield prev |+| rep
+        } yield app(prev, rep)
       }
-      tramp.map(_ |+| res)
+      tramp.map(app(_, res))
     }
 
     inner(x).run
@@ -46,7 +46,7 @@ object Parse {
   }
 
   def elementStats(x: xml.Elem): Map[String, Int] = {
-    foldXml((e: xml.Elem) => Vector(e.label))(x).elemCount
+    foldXml(e => Vector(e.label))(x)(Vector.empty, _ ++ _).elemCount
   }
 
   implicit class ElemCountOps[T](val x: Seq[T]) {
@@ -58,25 +58,25 @@ object Parse {
     val pathCommands = foldXml((e: xml.Elem) =>
       if (e.label == "path") e.attribute("d").get.head.text.filter(c => c.isLetter).toVector
       else Vector.empty[Char]
-    )(elem)
+    )(elem)(Vector.empty, _ ++ _)
     pathCommands.elemCount
   }
 
   def attributeStats(elem: xml.Elem): Map[String, Int] = {
-    val attrs = foldXml((e: xml.Elem) => e.attributes.asAttrMap.keys.toVector)(elem)
+    val attrs = foldXml((e: xml.Elem) => e.attributes.asAttrMap.keys.toVector)(elem)(Vector.empty, _ ++ _)
     attrs.elemCount
   }
 
   def parseAll[A](svg: FinalSVG[A]): xml.Elem => Option[Option[A]] =
     parseTree[A](svg, parseDrawable[A](svg))
 
-  def parseDrawable[A](svg: FinalSVG[A]): xml.Elem => Option[Option[A]] = elem => parsers.reduce((p1, p2) => new Model {
-    def apply[R](elem: xml.Elem, svg: FinalSVG[R]): Option[Option[R]] = p1(elem, svg) orElse p2(elem, svg)
-  }).apply(elem, svg).orElse {
-    println(s"Unrecognized element: ${elem.label}")
-    None
-  }
+  def parseDrawable[A](svg: FinalSVG[A]): xml.Elem => Option[Option[A]] =
+    elem =>
+      parsers.get(elem.label).map(_.apply(elem, svg)).orElse {
+        println(s"Unrecognized element: ${elem.label}")
+        None
+      }
 
-  val parsers: List[Model] =
-    List(Circle, Ellipse, Text, PathParser, RectParser)
+  val parsers: Map[String, Model] =
+    List(Circle, Ellipse, Text, Path, Rect).map(m => m.label -> m)(collection.breakOut)
 }

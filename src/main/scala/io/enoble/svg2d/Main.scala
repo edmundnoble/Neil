@@ -30,7 +30,7 @@ object Main {
   ).flatMap(p => p._1.map(_ -> p._2))(collection.breakOut)
 
   def parseOutputType(str: String): OutputType =
-    outputTypeMapping.getOrElse(str, throw new IllegalArgumentException(s"$str is not a valid output type: try 's', 'c', 'a', or 'r'"))
+    outputTypeMapping.getOrElse(str.toLowerCase(), throw new IllegalArgumentException(s"$str is not a valid output type: try 's', 'c', 'a', or 'r'"))
 
   case class MainConfig(outputType: OutputType = null, inputFolder: File = null, outputFolder: Option[File] = None)
 

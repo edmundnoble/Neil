@@ -10,30 +10,26 @@ import scala.collection.mutable
 import scalaz.std.vector._
 import scalaz.syntax.foldable._
 
-object PathParser extends Model {
+object Path extends Model {
 
   import fastparse.core.Result._
   import fastparse.core._
 
   import xml.Elem
 
-  override def apply[A](v1: Elem, svg: FinalSVG[A]): Option[Option[A]] =
-    if (v1.label ~= "path") {
-      val pathCoords = v1.getOpt("d")
-      val parsedPath: Option[Result[svg.Paths]] = pathCoords.map(s => new Path.Parsers[svg.Paths](svg.path).path.parse(s))
-      if (parsedPath.isEmpty) System.err.println("No 'd' attribute found in path element")
-      parsedPath.flatMap {
-        case Success(path, _) => Some(Some(svg.path(path)))
-        case _: Failure =>
-          System.err.println(s"Failed to parse path: ${pathCoords.get}")
-          None
-      }
-    } else {
-      None
-    }
-}
+  override val label: String = "path"
 
-object Path {
+  override def apply[A](v1: Elem, svg: FinalSVG[A]): Option[A] = {
+    val pathCoords = v1.getOpt("d")
+    val parsedPath: Option[Result[svg.Paths]] = pathCoords.map(s => new Path.Parsers[svg.Paths](svg.path).path.parse(s))
+    if (parsedPath.isEmpty) System.err.println("No 'd' attribute found in path element")
+    parsedPath.flatMap {
+      case Success(path, _) => Some(svg.path(path))
+      case _: Failure =>
+        System.err.println(s"Failed to parse path: ${pathCoords.get}")
+        None
+    }
+  }
 
   class Parsers[A](pathCtx: FinalPath[A]) {
 
@@ -49,7 +45,7 @@ object Path {
       override def toString() = name
     }
 
-    implicit def vectorRepeater[R] = new Repeater[R, Vector[R]] {
+    implicit def vectorRepeater[R]: Repeater[R, Vector[R]] = new Repeater[R, Vector[R]] {
       override type Acc = mutable.Builder[R, Vector[R]]
 
       override def initial: Acc = Vector.newBuilder[R]
@@ -57,6 +53,22 @@ object Path {
       override def accumulate(t: R, acc: Acc): Unit = acc += t
 
       override def result(acc: Acc): Vector[R] = acc.result()
+    }
+
+    class PathBuilder {
+      var soFar: A = pathCtx.empty
+    }
+
+    def pathRepeater: Repeater[A, A] = new Repeater[A, A] {
+      override type Acc = PathBuilder
+
+      override def initial: PathBuilder = new PathBuilder
+
+      override def accumulate(t: A, acc: PathBuilder): Unit =
+        acc.soFar = pathCtx.append(acc.soFar, t)
+
+      override def result(acc: PathBuilder): A =
+        acc.soFar
     }
 
     // Here is the parser
@@ -109,12 +121,11 @@ object Path {
     val smoothCubic: Parser[A] = P(("s" ~ cubicArgs map pathCtx.smoothCubicRel) | ("S" ~ cubicArgs map pathCtx.smoothCubic))
     val closePath: Parser[A] = P(CharIn("zZ") map (_ => pathCtx.closePath()))
     val command: Parser[A] = P(closePath | lineTo | horizLineTo | vertLineTo | cubic | smoothCubic | quad | ellipticalArc)
-    val pathCommands: Parser[Vector[Vector[A]]] =
-      P(((moveTo ~ space) ~ (command ~ space).rep).rep(1)).map(_.map { case (a, v) => a +: v })
-    val path: Parser[A] = P(pathCommands.map(
-      _.foldLeft(pathCtx.empty) {
-        case (b, c) => pathCtx.append(b, c.foldLeft(pathCtx.empty)(pathCtx.append))
-      }))
+    val pathCommands: Parser[A] =
+      P(((moveTo ~ space) ~ (command ~ space).rep(pathRepeater))
+        .map((pathCtx.append _).tupled)
+        .rep[A](1)(pathRepeater))
+    val path: Parser[A] = P(pathCommands)
   }
 
 }

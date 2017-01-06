@@ -7,7 +7,8 @@ import scala.util.Try
 package object xmlparse {
 
   trait Model {
-    def apply[A](elem: xml.Elem, svg: FinalSVG[A]): Option[Option[A]]
+    val label: String
+    def apply[A](elem: xml.Elem, svg: FinalSVG[A]): Option[A]
   }
 
   type ParseError = Exception
