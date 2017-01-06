@@ -16,10 +16,15 @@ import scala.io.Source
 import scala.collection.JavaConverters._
 
 object Main {
+
   sealed trait OutputType
+
   case object Swift extends OutputType
+
   case object ObjectiveC extends OutputType
+
   case object Android extends OutputType
+
   case object Raw extends OutputType
 
   val outputTypeMapping: Map[String, Main.OutputType] = List(
@@ -37,15 +42,22 @@ object Main {
   implicit val outputTypeInstances: Read[OutputType] = Read.reads(parseOutputType)
 
   val parser = new scopt.OptionParser[MainConfig]("neil") {
-      head("neil", "0.0.2")
-      opt[OutputType]('t', "otype") required() valueName "<outputType>" action { (x, c) =>
-        c.copy(outputType = x)
-      } text "output type; valid output types are 's' (Swift), 'c' (Objective C), 'a' (Android), and 'r' (Raw)"
-      opt[File]('i', "input") required() valueName "<file>" action { (x, c) =>
-        c.copy(inputFolder = x) } text "input folder of svg's"
-      opt[File]('o', "output") optional() valueName "<file>" action { (x, c) =>
-        c.copy(outputFolder = Some(x)) } text "output code generation folder (or none, for stdout)"
-      help("help") text "prints this usage text"
+    head("neil", "0.0.2")
+    opt[OutputType]('t', "otype") required() valueName "<outputType>" action { (x, c) =>
+      c.copy(outputType = x)
+    } text "output type; valid output types are 's' (Swift), 'c' (Objective C), 'a' (Android), and 'r' (Raw)"
+    opt[File]('i', "input") required() valueName "<file>" action { (x, c) =>
+      c.copy(inputFolder = x)
+    } text "input folder of svg's"
+    opt[File]('o', "output") optional() valueName "<file>" action { (x, c) =>
+      c.copy(outputFolder = Some(x))
+    } text "output code generation folder (or none, for stdout)"
+    help("help") text "prints this usage text"
+  }
+
+  def parseAndRenderOutput(renderer: FinalSVG[Renderable], svgContent: xml.Elem): Option[Option[String]] = {
+    val parsed = Parse.parseAll(renderer)(svgContent)
+    parsed.map(_.map(_.asString))
   }
 
   def main(args: Array[String]): Unit = {
@@ -61,9 +73,9 @@ object Main {
       }).asInstanceOf[FinalSVG[Renderable]]
       val isDir = filePath.isDirectory
       if (isDir) {
-        val svgFiles = filePath.listFiles().view
+        val svgFiles = filePath.listFiles()
         val xmlFiles = svgFiles.map(f => xml.XML.loadFile(f))
-        val parsed = xmlFiles.map(Parse.parseAll(renderer))
+        val parsed: List[Option[Option[String]]] = xmlFiles.map(parseAndRenderOutput(renderer, _))(collection.breakOut)
         val (successes, failures) = parsed.partition(_.isDefined)
         val successCount = successes.length
         val failureCount = failures.length
@@ -71,17 +83,14 @@ object Main {
         println(s"Successes: $successCount")
         println(s"Failures: $failureCount")
         println(f"Success rate: $successRate%2.2f%%")
-        val failedFiles = parsed.zipWithIndex.map(x => (x._1, svgFiles(x._2))).filter(_._1.isEmpty).map(_._2.getName)
+        val failedFiles = parsed.zipWithIndex.collect { case (Some(_), d) => svgFiles(d).getName }
         println(s"Failed files: \n${failedFiles.mkString("\n")}")
-        val stringVector = parsed.map(_.map(_.map(_.asString))).toVector
-        println(stringVector)
+        println(parsed)
       } else {
         val xml = scala.xml.XML.loadFile(filePath)
-        val parsed = Parse.parseAll(renderer)(xml)
-        println(parsed.fold {
+        val parsed = parseAndRenderOutput(renderer, xml)
+        println(parsed.map(_.toString).getOrElse {
           "Parsing failed!"
-        } { codes =>
-          codes.map(_.asString).toString
         })
       }
     }
