@@ -124,7 +124,7 @@ object Path extends Model {
     val pathCommands: Parser[A] =
       P(((moveTo ~ space) ~ (command ~ space).rep(pathRepeater))
         .map((pathCtx.append _).tupled)
-        .rep[A](1)(pathRepeater))
+        .rep(1)(pathRepeater))
     val path: Parser[A] = P(pathCommands)
   }
 
