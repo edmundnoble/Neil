@@ -5,8 +5,8 @@ import io.enoble.svg2d.ast._
 import scalaz.Monoid
 
 object InitialPathRenderer extends FinalPath[Vector[InitialPath]] {
-  override implicit def monoid[AA >: Vector[InitialPath]] =
-    scalaz.std.vector.vectorMonoid[InitialPath].asInstanceOf[Monoid[AA]]
+  override val empty = Vector.empty[InitialPath]
+  override def append(fst: Vector[InitialPath], snd: Vector[InitialPath]) = fst ++ snd
   override def closePath() = Vector(ClosePath())
   override def moveTo(points: Vector[(Double, Double)]) = Vector(MoveTo(points))
   override def moveToRel(points: Vector[(Double, Double)]) = Vector(MoveToRel(points))

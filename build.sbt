@@ -1,6 +1,8 @@
-scalaVersion := "2.11.8"
+name in ThisBuild := "neil"
 
-version := "0.0.1"
+scalaVersion in ThisBuild := "2.11.8"
+
+version in ThisBuild := "0.0.2"
 
 libraryDependencies += "org.scalaz" % "scalaz-core_2.11" % "7.2.8"
 

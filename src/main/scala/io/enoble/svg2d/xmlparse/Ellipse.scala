@@ -1,4 +1,4 @@
-package io.enoble.svg2d.parsing
+package io.enoble.svg2d.xmlparse
 
 
 import io.enoble.svg2d.ast.FinalSVG

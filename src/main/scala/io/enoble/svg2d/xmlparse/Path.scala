@@ -1,4 +1,4 @@
-package io.enoble.svg2d.parsing
+package io.enoble.svg2d.xmlparse
 
 import fastparse.Implicits.Repeater
 import fastparse.Implicits.Repeater.UnitRepeater
@@ -51,8 +51,11 @@ object Path {
 
     implicit def vectorRepeater[R] = new Repeater[R, Vector[R]] {
       override type Acc = mutable.Builder[R, Vector[R]]
+
       override def initial: Acc = Vector.newBuilder[R]
+
       override def accumulate(t: R, acc: Acc): Unit = acc += t
+
       override def result(acc: Acc): Vector[R] = acc.result()
     }
 
@@ -106,11 +109,12 @@ object Path {
     val smoothCubic: Parser[A] = P(("s" ~ cubicArgs map pathCtx.smoothCubicRel) | ("S" ~ cubicArgs map pathCtx.smoothCubic))
     val closePath: Parser[A] = P(CharIn("zZ") map (_ => pathCtx.closePath()))
     val command: Parser[A] = P(closePath | lineTo | horizLineTo | vertLineTo | cubic | smoothCubic | quad | ellipticalArc)
-    val pathCommands: Parser[Vector[(A, Vector[A])]] = P(((moveTo ~ space) ~ (command ~ space).rep ~ space).rep(1))
+    val pathCommands: Parser[Vector[Vector[A]]] =
+      P(((moveTo ~ space) ~ (command ~ space).rep).rep(1)).map(_.map { case (a, v) => a +: v })
     val path: Parser[A] = P(pathCommands.map(
-      _.foldMap {
-        case (m, c) => pathCtx.monoid.append(m, c.suml(pathCtx.monoid))
-      }(pathCtx.monoid)))
+      _.foldLeft(pathCtx.empty) {
+        case (b, c) => pathCtx.append(b, c.foldLeft(pathCtx.empty)(pathCtx.append))
+      }))
   }
 
 }

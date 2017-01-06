@@ -6,7 +6,7 @@ import java.text.DecimalFormat
 
 import io.enoble.svg2d.ast.FinalSVG
 import io.enoble.svg2d.data.{AndroidCode, ObjectiveCCode, Renderable, SwiftCode}
-import io.enoble.svg2d.parsing.Parse
+import io.enoble.svg2d.xmlparse.Parse
 import io.enoble.svg2d.render._
 import scopt.Read
 
@@ -37,7 +37,7 @@ object Main {
   implicit val outputTypeInstances: Read[OutputType] = Read.reads(parseOutputType)
 
   val parser = new scopt.OptionParser[MainConfig]("neil") {
-      head("neil", "0.0.1")
+      head("neil", "0.0.2")
       opt[OutputType]('t', "otype") required() valueName "<outputType>" action { (x, c) =>
         c.copy(outputType = x)
       } text "output type; valid output types are 's' (Swift), 'c' (Objective C), 'a' (Android), and 'r' (Raw)"
@@ -49,18 +49,19 @@ object Main {
   }
 
   def main(args: Array[String]): Unit = {
-    val configParsed = parser.parse(args, MainConfig())
+    val configParsed: Option[MainConfig] =
+      parser.parse(args, MainConfig())
     configParsed.foreach { config =>
       val filePath = config.inputFolder
-      val renderer: FinalSVG[Renderable] = config.outputType match {
+      val renderer: FinalSVG[Renderable] = (config.outputType match {
         case Swift => SwiftRenderer
         case ObjectiveC => ObjectiveCRenderer
         case Android => AndroidRenderer
         case Raw => InitialRenderer
-      }
+      }).asInstanceOf[FinalSVG[Renderable]]
       val isDir = filePath.isDirectory
       if (isDir) {
-        val svgFiles = filePath.listFiles()
+        val svgFiles = filePath.listFiles().view
         val xmlFiles = svgFiles.map(f => xml.XML.loadFile(f))
         val parsed = xmlFiles.map(Parse.parseAll(renderer))
         val (successes, failures) = parsed.partition(_.isDefined)
@@ -79,7 +80,7 @@ object Main {
         parsed.fold {
           println("Parsing failed!")
         } { codes =>
-          codes.suml(renderer.monoid[Renderable]).asString
+          codes.foldLeft(renderer.empty)(renderer.append).asString
         }
       }
     }

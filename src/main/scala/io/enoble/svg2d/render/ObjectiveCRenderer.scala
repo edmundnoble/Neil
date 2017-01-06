@@ -7,10 +7,12 @@ import scalaz.Monoid
 
 object ObjectiveCRenderer extends FinalSVG[ObjectiveCCode] {
   override type Paths = Nothing
-  override implicit def monoid[AA >: ObjectiveCCode] = ObjectiveCCode.objectiveCMonoid.asInstanceOf[Monoid[AA]]
+  override val empty = ObjectiveCCode(Vector.empty)
+  override def append(f1: ObjectiveCCode, f2: ObjectiveCCode): ObjectiveCCode =
+    ObjectiveCCode(f1.fragments ++ f2.fragments)
   override def circle(x: Double, y: Double, r: Double) = ???
   override def ellipse(x: Double, y: Double, rx: Double, ry: Double) = ???
   override def text(text: String, x: Double, y: Double) = ???
   override def path(paths: Nothing) = ???
-  override val path = ???
+  override lazy val path = ???
 }

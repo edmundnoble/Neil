@@ -2,7 +2,7 @@ package io.enoble.svg2d.utils
 
 import java.io.File
 
-import io.enoble.svg2d.parsing.Parse
+import io.enoble.svg2d.xmlparse.Parse
 
 import scalaz.Scalaz._
 import scalaz._

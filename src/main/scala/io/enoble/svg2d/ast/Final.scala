@@ -1,14 +1,13 @@
 package io.enoble.svg2d.ast
 
-import scalaz.Alpha.A
-import scalaz.Monoid
-
-trait FinalSVG[+A] {
+trait FinalSVG[A] {
   type Paths
 
   val path: FinalPath[Paths]
 
-  implicit def monoid[AA >: A]: Monoid[AA]
+  val empty: A
+
+  def append(fst: A, snd: A): A
 
   def circle(x: Double, y: Double, r: Double): A
 
@@ -19,11 +18,13 @@ trait FinalSVG[+A] {
   def path(paths: Paths): A
 }
 
-trait FinalPath[+A] {
+trait FinalPath[A] {
 
   type Coords = (Double, Double)
 
-  implicit def monoid[AA >: A]: Monoid[AA]
+  val empty: A
+
+  def append(fst: A, snd: A): A
 
   def closePath(): A
 

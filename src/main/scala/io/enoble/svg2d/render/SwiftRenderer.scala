@@ -8,10 +8,12 @@ import scalaz.Monoid
 
 object SwiftRenderer extends FinalSVG[SwiftCode]  {
   override type Paths = Nothing
-  override implicit def monoid[AA >: SwiftCode] = SwiftCode.swiftMonoid.asInstanceOf[Monoid[AA]]
+  override val empty = SwiftCode(Vector.empty)
+  override def append(f1: SwiftCode, f2: SwiftCode): SwiftCode =
+    SwiftCode(f1.fragments ++ f2.fragments)
   override def circle(x: Double, y: Double, r: Double) = ???
   override def ellipse(x: Double, y: Double, rx: Double, ry: Double) = ???
   override def text(text: String, x: Double, y: Double) = ???
   override def path(paths: Nothing) = ???
-  override val path = ???
+  override lazy val path = ???
 }

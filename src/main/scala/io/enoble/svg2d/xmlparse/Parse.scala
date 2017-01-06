@@ -1,4 +1,4 @@
-package io.enoble.svg2d.parsing
+package io.enoble.svg2d.xmlparse
 
 import io.enoble.svg2d.ast.FinalSVG
 
@@ -25,6 +25,7 @@ object Parse {
       }
       tramp.map(_ |+| res)
     }
+
     inner(x).run
   }
 
@@ -38,7 +39,7 @@ object Parse {
               case x1: Elem => parseTree(svg, f)(x1)
               case _ => Some(None)
             }
-            (res1 |@| second){(a, va) => implicit val sem = svg.monoid[A]; a |+| va}
+            (res1 |@| second) { (a, va) => (a |@| va) (svg.append).orElse(a).orElse(va) }
           }
       }
     }
