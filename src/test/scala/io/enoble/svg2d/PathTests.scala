@@ -20,8 +20,7 @@ class PathTests extends FreeSpec {
     assert(parsers.path.parse(input) == expectedOutput)
   }
 
-  "A simple path should be parsable" in
-    parserTest(
+  "A simple path should be parsable" in parserTest(
       "m 25.000985,1015.208 c -0.23015,0 -0.36032,0.05 -0.55274,0.2422 l -1.6914,-1.6914 c -0.1936,-0.1936 -0.32064,-0.2422 -0.55078,-0.2422 z",
       Result.Success(
         Vector[InitialPath](
@@ -34,8 +33,7 @@ class PathTests extends FreeSpec {
         135)
     )
 
-  "A quadratic should be parsable" in
-    parserTest(
+  "A quadratic should be parsable" in parserTest(
       "m 0,0 q 0,0 0,0",
       Result.Success(
         Vector[InitialPath](
@@ -45,14 +43,12 @@ class PathTests extends FreeSpec {
         15)
     )
 
-  "An elliptic should be parsable" in
-    parserTest(
+  "An elliptic should be parsable" in parserTest(
       "m 0,0 a 0,0 0 0,0 0,0",
       Result.Success(Vector[InitialPath](MoveToRel(Vector((0.0, 0.0))), EllipticRel(Vector(EllipticParam((0.0, 0.0), 0.0, largeArc = false, sweep = false, (0.0, 0.0))))), 21)
     )
 
-  "A moveto should be parsable as a full path" in
-    parserTest(
+  "A moveto should be parsable as a full path" in parserTest(
       "m 157.86809,496.83258 0,-32.796 -5.16279,0 0,32.796 5.16279,0",
       Result.Success(Vector[InitialPath](MoveToRel(Vector((157.86809, 496.83258), (0.0, -32.796), (-5.16279, 0.0), (0.0, 32.796), (5.16279, 0.0)))), 61)
     )
