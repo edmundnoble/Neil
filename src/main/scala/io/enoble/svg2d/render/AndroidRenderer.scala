@@ -88,16 +88,16 @@ object AndroidRenderer extends FinalSVG[AndroidCode] {
         State[PathState, AndroidCode](state => (state, AndroidCode(outputLine(state.indentation, "path.close();"))))
 
       override def moveTo(points: Vector[Coords]): Paths =
-        foldLast(points) { case (_, (x, y)) => s"path.moveTo($x, $y);" }((c, _) => c)
+        foldLast(points) { case ((x, y), _) => s"path.moveTo($x, $y);" }((c, _) => c)
 
       override def moveToRel(points: Vector[Coords]): Paths =
-        foldSum(points) { case (_, (x, y)) => s"path.rMoveTo($x, $y);" }(addCoords)(addCoords)
+        foldSum(points) { case ((x, y), _) => s"path.rMoveTo($x, $y);" }(addCoords)(addCoords)
 
       override def lineTo(points: Vector[Coords]): Paths =
-        foldLast(points) { case (_, (x, y)) => s"path.lineTo($x, $y);" }((c, _) => c)
+        foldLast(points) { case ((x, y), _) => s"path.lineTo($x, $y);" }((c, _) => c)
 
       override def lineToRel(points: Vector[Coords]): Paths =
-        foldSum(points) { case (_, (x, y)) => s"path.rLineTo($x, $y);" }(addCoords)(addCoords)
+        foldSum(points) { case ((x, y), _) => s"path.rLineTo($x, $y);" }(addCoords)(addCoords)
 
       override def verticalLineTo(y: Vector[Double]): Paths =
         foldLast(y)((g, c) => s"path.lineTo(${c._1}, $g);")((c, a) => a.copy(_2 = c))

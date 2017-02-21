@@ -16,14 +16,19 @@ class AndroidPathTests extends FreeSpec {
 
 
   "MoveTo" in rendererTest(
-    input = Vector(MoveTo(Vector((0.0, 0.0)))),
-    expectedOutput = "path.moveTo(0.0, 0.0);\n"
+    input = Vector(MoveTo(Vector((1.0, 1.0)))),
+    expectedOutput = "path.moveTo(1.0, 1.0);\n"
   )
 
   "MoveTo with indentation" in rendererTest(
     input = Vector(MoveTo(Vector((0.0, 0.0)))),
     initialState = PathState(here = (0, 0), indentation = 1),
     expectedOutput = "    path.moveTo(0.0, 0.0);\n"
+  )
+
+  "Multiple MoveTo arguments" in rendererTest(
+    input = Vector(MoveTo(Vector((0.0, 0.0), (1.0, 1.0)))),
+    expectedOutput = "path.moveTo(0.0, 0.0);\npath.moveTo(1.0, 1.0);\n"
   )
 
   "MoveToRel" in rendererTest(
