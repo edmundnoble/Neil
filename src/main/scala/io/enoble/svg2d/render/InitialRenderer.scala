@@ -1,4 +1,7 @@
-package io.enoble.svg2d.render
+package io
+package enoble
+package svg2d
+package render
 
 import io.enoble.svg2d.ast._
 import io.enoble.svg2d.data.Renderable
@@ -14,6 +17,6 @@ object InitialRenderer extends FinalSVG[InitialCode] {
   override def circle(x: Double, y: Double, r: Double) = InitialCode(Vector(DrawCircle(x, y, r)))
   override def ellipse(x: Double, y: Double, rx: Double, ry: Double) = InitialCode(Vector(DrawEllipse(x, y, rx, ry)))
   override def text(text: String, x: Double, y: Double) = InitialCode(Vector(DrawText(text, x, y)))
-  override def path(paths: Vector[InitialPath]) = InitialCode(Vector(DrawPath(paths)))
+  override def includePath(paths: Vector[InitialPath]) = InitialCode(Vector(DrawPath(paths)))
   override val path = InitialPathRenderer
 }

@@ -1,4 +1,7 @@
-package io.enoble.svg2d.utils
+package io
+package enoble
+package svg2d
+package utils
 
 import java.io.File
 

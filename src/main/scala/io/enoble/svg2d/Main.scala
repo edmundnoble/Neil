@@ -1,4 +1,6 @@
-package io.enoble.svg2d
+package io
+package enoble
+package svg2d
 
 import java.io.File
 import java.nio.file.{Files, Paths}

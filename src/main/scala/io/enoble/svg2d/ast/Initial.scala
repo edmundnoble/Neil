@@ -1,4 +1,7 @@
-package io.enoble.svg2d.ast
+package io
+package enoble
+package svg2d
+package ast
 
 trait InitialSVG
 

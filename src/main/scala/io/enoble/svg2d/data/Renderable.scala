@@ -1,5 +1,8 @@
-package io.enoble.svg2d.data
+package io
+package enoble
+package svg2d
+package data
 
-trait Renderable {
+trait Renderable extends Any {
   def asString: String
 }

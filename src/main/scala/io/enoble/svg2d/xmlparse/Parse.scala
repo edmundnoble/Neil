@@ -1,4 +1,7 @@
-package io.enoble.svg2d.xmlparse
+package io
+package enoble
+package svg2d
+package xmlparse
 
 import io.enoble.svg2d.ast.FinalSVG
 

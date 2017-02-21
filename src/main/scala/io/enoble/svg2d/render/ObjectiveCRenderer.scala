@@ -1,4 +1,7 @@
-package io.enoble.svg2d.render
+package io
+package enoble
+package svg2d
+package render
 
 import io.enoble.svg2d.ast.FinalSVG
 import io.enoble.svg2d.data.{ObjectiveCCode, SwiftCode}
@@ -13,6 +16,6 @@ object ObjectiveCRenderer extends FinalSVG[ObjectiveCCode] {
   override def circle(x: Double, y: Double, r: Double) = ???
   override def ellipse(x: Double, y: Double, rx: Double, ry: Double) = ???
   override def text(text: String, x: Double, y: Double) = ???
-  override def path(paths: Nothing) = ???
+  override def includePath(paths: Nothing) = ???
   override lazy val path = ???
 }

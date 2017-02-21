@@ -1,4 +1,7 @@
-package io.enoble.svg2d.render
+package io
+package enoble
+package svg2d
+package render
 
 import io.enoble.svg2d.ast._
 

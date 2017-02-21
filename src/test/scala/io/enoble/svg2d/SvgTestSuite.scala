@@ -1,4 +1,6 @@
-package io.enoble.svg2d
+package io
+package enoble
+package svg2d
 
 import io.enoble.svg2d.xmlparse.Parse
 import io.enoble.svg2d.render.{InitialCode, InitialRenderer}

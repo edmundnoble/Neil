@@ -1,4 +1,7 @@
-package io.enoble.svg2d.xmlparse
+package io
+package enoble
+package svg2d
+package xmlparse
 
 import fastparse.Implicits.Repeater
 import fastparse.Implicits.Repeater.UnitRepeater
@@ -24,14 +27,14 @@ object Path extends Model {
     val parsedPath: Option[Result[svg.Paths]] = pathCoords.map(s => new Path.Parsers[svg.Paths](svg.path).path.parse(s))
     if (parsedPath.isEmpty) System.err.println("No 'd' attribute found in path element")
     parsedPath.flatMap {
-      case Success(path, _) => Some(svg.path(path))
+      case Success(path, _) => Some(svg.includePath(path))
       case _: Failure =>
         System.err.println(s"Failed to parse path: ${pathCoords.get}")
         None
     }
   }
 
-  class Parsers[A](pathCtx: FinalPath[A]) {
+  case class Parsers[A](pathCtx: FinalPath[A]) {
 
     type Coords = (Double, Double)
 
