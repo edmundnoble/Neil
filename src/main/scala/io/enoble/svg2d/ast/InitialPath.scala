@@ -3,20 +3,7 @@ package enoble
 package svg2d
 package ast
 
-trait InitialSVG
-
-case class DrawText(text: String, posX: Double, posY: Double) extends InitialSVG
-case class DrawEllipse(x: Double, y: Double, rx: Double, ry: Double) extends InitialSVG
-case class DrawCircle(x: Double, y: Double, r: Double) extends InitialSVG
-case class DrawPath(commands: Seq[InitialPath]) extends InitialSVG
-
 trait InitialPath
-
-object InitialPath {
-  type Coords = (Double, Double)
-}
-
-import io.enoble.svg2d.ast.InitialPath.Coords
 
 case class ClosePath() extends InitialPath
 case class MoveTo(points: Vector[Coords]) extends InitialPath

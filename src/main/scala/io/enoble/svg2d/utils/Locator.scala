@@ -4,11 +4,9 @@ package svg2d
 package utils
 
 import java.io.File
+import cats.implicits._
 
 import io.enoble.svg2d.xmlparse.Parse
-
-import scalaz.Scalaz._
-import scalaz._
 
 object Locator {
   def main(args: Array[String]): Unit = {

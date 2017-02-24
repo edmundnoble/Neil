@@ -3,20 +3,19 @@ package enoble
 package svg2d
 package xmlparse
 
-import fastparse.Implicits.Repeater
-import fastparse.Implicits.Repeater.UnitRepeater
+import fastparse.core.Implicits.Repeater
+import fastparse.core.Implicits.Repeater.UnitRepeater
 import io.enoble.svg2d.ast._
 
 import scala.collection.immutable.VectorBuilder
 import scala.collection.mutable
 
-import scalaz.std.vector._
-import scalaz.syntax.foldable._
+import cats.instances.vector._
+import cats.syntax.foldable._
 
 object Path extends Model {
 
-  import fastparse.core.Result._
-  import fastparse.core._
+  import fastparse.all._
 
   import xml.Elem
 
@@ -24,11 +23,11 @@ object Path extends Model {
 
   override def apply[A](v1: Elem, svg: FinalSVG[A]): Option[A] = {
     val pathCoords = v1.getOpt("d")
-    val parsedPath: Option[Result[svg.Paths]] = pathCoords.map(s => new Path.Parsers[svg.Paths](svg.path).path.parse(s))
+    val parsedPath: Option[Parsed[svg.Paths]] = pathCoords.map(s => new Path.Parsers[svg.Paths](svg.path).path.parse(s))
     if (parsedPath.isEmpty) System.err.println("No 'd' attribute found in path element")
     parsedPath.flatMap {
-      case Success(path, _) => Some(svg.includePath(path))
-      case _: Failure =>
+      case Parsed.Success(path, _) => Some(svg.includePath(path))
+      case _: Parsed.Failure =>
         System.err.println(s"Failed to parse path: ${pathCoords.get}")
         None
     }
@@ -90,7 +89,7 @@ object Path extends Model {
     val commaWsp = P((space ~ ",".? ~ space) | ("," ~ space))
     val wspDouble = P(space ~ number)
 
-    val coordPair: P[Coords] = (number ~ commaWsp) ~! number
+    val coordPair: P[Coords] = (number ~ commaWsp) ~/ number
     val twoCoordPairs: P[(Coords, Coords)] = P((coordPair ~ commaWsp ~ coordPair).map {
       case (x1, y1, c1) => ((x1, y1), c1)
     })

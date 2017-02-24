@@ -1,4 +1,6 @@
-package io.enoble.svg2d
+package io
+package enoble
+package svg2d
 
 import io.enoble.svg2d.ast._
 import io.enoble.svg2d.render.AndroidRenderer
@@ -9,7 +11,7 @@ class AndroidPathTests extends FreeSpec {
 
   def rendererTest[A](input: Vector[InitialPath], initialState: PathState = PathState(here = (0, 0), indentation = 0),
                       expectedOutput: String, expectedState: Option[PathState] = None): Unit = {
-    val out = AndroidRenderer.path.renderInitial(input)(initialState)
+    val out = AndroidRenderer(rwrsbActionMonoid).path.renderInitial(input).run(initialState).value
     assert(out._2.asString == expectedOutput)
     expectedState.foreach(s => assert(out._1 == s))
   }

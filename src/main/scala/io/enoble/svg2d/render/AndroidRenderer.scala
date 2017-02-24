@@ -1,69 +1,102 @@
 package io
 package enoble
-package svg2d
-package render
+package svg2d.render
 
+import cats.{Eval, Foldable}
+import cats.data.{State, StateT}
+import cats.implicits._
 import io.enoble.svg2d.ast._
-import io.enoble.svg2d.data.AndroidCode
+import svg2d.Coords
 
-import scalaz._
-import Scalaz._
+import scala.annotation.tailrec
 
-object AndroidRenderer extends FinalSVG[AndroidCode] {
-  override val empty: AndroidCode = AndroidCode(Vector.empty)
+object AndroidRenderer {
 
-  override def append(f1: AndroidCode, f2: AndroidCode): AndroidCode =
-    AndroidCode(f1.ap ++ f2.ap)
+  final case class PathState(here: Coords, indentation: Int)
 
-  override def circle(x: Double, y: Double, r: Double) =
-    AndroidCode(_ ++= s"c.drawCircle($x, $y, $r, p);\n")
+  implicit class fastMonoidInterpolation(val sc: StringContext) extends AnyVal {
+    def fm[A](args: Any*)(implicit fastMonoid: FastMonoid[String, A]): A = {
+      import fastMonoid.monoid
+      val partIt = sc.parts.iterator
+      val argIt = args.iterator
+      var now: A = fastMonoid.in(partIt.next())
+      while (partIt.hasNext) {
+        now = now |+| fastMonoid.in(String.valueOf(argIt.next())) |+| fastMonoid.in(partIt.next())
+      }
+      now
+    }
+  }
 
-  override def ellipse(x: Double, y: Double, rx: Double, ry: Double): AndroidCode = {
+}
+
+final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extends FinalSVG[A] {
+  self =>
+
+  implicit val implicitStringyMonoid = stringyMonoid
+
+  import AndroidRenderer._
+  import stringyMonoid._
+
+  override val empty: A = monoid.empty
+
+  override def append(f1: A, f2: A): A = {
+    monoid.combine(f1, f2)
+  }
+
+  override def circle(x: Double, y: Double, r: Double): A = {
+    fm"c.drawCircle($x, $y, $r, p);\n"
+  }
+
+  override def ellipse(x: Double, y: Double, rx: Double, ry: Double): A = {
     val left = x - (rx / 2)
     val top = y + (ry / 2)
     val right = x + (rx / 2)
     val bottom = y - (ry / 2)
-    AndroidCode(_ ++= s"RectF bounds = new RectF($left, $top, $right, $bottom);\nc.drawOval(bounds, p);\n")
+    append(
+      fm"{\n  RectF bounds = new RectF($left, $top, $right, $bottom);\n",
+      in("  c.drawOval(bounds, p);\n}\n")
+    )
   }
 
-  override def text(text: String, x: Double, y: Double): AndroidCode = {
-    AndroidCode(_ ++= s"c.drawText($text, $x, $y, p);\n")
+  override def text(text: String, x: Double, y: Double): A = {
+    outputLine(fm"c.drawText($text, $x, $y, p);")
   }
 
-  case class PathState(here: Coords, indentation: Int)
+  @tailrec
+  private def indent(a: A, level: Int = 0): A =
+    if (level <= 0) a
+    else indent(
+      append(in("    "), a),
+      level - 1
+    )
 
-  override type Paths = State[PathState, AndroidCode]
+  private def outputLine(code: A, indentation: Int = 0): A =
+    append(
+      indent(code, indentation),
+      in("\n")
+    )
 
-  def outputLine(indentation: Int, code: String): SBAction = { sb =>
-    sb.ensureCapacity(sb.length + indentation * 4 + code.length() + 1)
-    var i = 0
-    while (i < indentation) {
-      sb ++= "    "
-      i += 1
-    }
-    sb ++= code
-    sb += '\n'
-  }
+  override type Paths = State[PathState, A]
 
   override val path: FinalPath[Paths] =
     new FinalPath[Paths] {
-      override val empty: Paths = State.state(AndroidCode(Vector()))
+      override val empty: Paths = State.pure(self.empty)
 
-      def foldLast[C](vec: Vector[C])(con: (C, Coords) => String)(out: (C, Coords) => Coords): Paths =
+      def foldLast[C](vec: Vector[C])(con: (C, Coords) => A)(out: (C, Coords) => Coords): Paths =
         if (vec.isEmpty) empty
-        else State[PathState, AndroidCode](state =>
+        else State[PathState, A](state =>
           (state.copy(here = out(vec.last, state.here)),
-            AndroidCode(vec.map(v => outputLine(state.indentation, con(v, state.here)))))
+            vec.foldMap(v => outputLine(con(v, state.here), indentation = state.indentation)))
         )
 
       // assumes as an optimization that none of the intermediate coords changes can be observed by `out` or `con`.
       // this is always the case because if we are folding a vector of arguments for the same command, the arguments
       // must all observe and modify the same coordinates and none observe and modify the same coordinate.
-      def foldSum[C](vec: Vector[C])(con: (C, Coords) => String)(out: (C, Coords) => Coords)(add: (C, C) => C): Paths =
+      def foldSum[C](vec: Vector[C])(con: (C, Coords) => A)(out: (C, Coords) => Coords)(add: (C, C) => C): Paths =
       if (vec.isEmpty) empty
-      else State[PathState, AndroidCode](state =>
+      else State[PathState, A](state =>
         (state.copy(here = out(vec.reduce(add), state.here)),
-          AndroidCode(vec.map(v => outputLine(state.indentation, con(v, state.here)))))
+          vec.foldMap(v => outputLine(con(v, state.here), indentation = state.indentation)))
       )
 
       def addCoords(p1: Coords, p2: Coords): Coords =
@@ -82,75 +115,77 @@ object AndroidRenderer extends FinalSVG[AndroidCode] {
         (p1._1, p1._2 + p2._2)
 
       override def append(fst: Paths, snd: Paths): Paths =
-        StateT.stateMonad.lift2((a: AndroidCode, b: AndroidCode) => AndroidCode(a.ap ++ b.ap))(fst, snd)
+        StateT.catsDataMonadForStateT[Eval, PathState].map2(fst, snd)(self.append)
 
       override def closePath(): Paths =
-        State[PathState, AndroidCode](state => (state, AndroidCode(outputLine(state.indentation, "path.close();"))))
+        State[PathState, A](state => (state, outputLine(in("path.close();"), state.indentation)))
 
       override def moveTo(points: Vector[Coords]): Paths =
-        foldLast(points) { case ((x, y), _) => s"path.moveTo($x, $y);" }((c, _) => c)
+        foldLast(points) { case ((x, y), _) => fm"path.moveTo($x, $y);" }((c, _) => c)
 
       override def moveToRel(points: Vector[Coords]): Paths =
-        foldSum(points) { case ((x, y), _) => s"path.rMoveTo($x, $y);" }(addCoords)(addCoords)
+        foldSum(points) { case ((x, y), _) => fm"path.rMoveTo($x, $y);" }(addCoords)(addCoords)
 
       override def lineTo(points: Vector[Coords]): Paths =
-        foldLast(points) { case ((x, y), _) => s"path.lineTo($x, $y);" }((c, _) => c)
+        foldLast(points) { case ((x, y), _) => fm"path.lineTo($x, $y);" }((c, _) => c)
 
       override def lineToRel(points: Vector[Coords]): Paths =
-        foldSum(points) { case ((x, y), _) => s"path.rLineTo($x, $y);" }(addCoords)(addCoords)
+        foldSum(points) { case ((x, y), _) => fm"path.rLineTo($x, $y);" }(addCoords)(addCoords)
 
       override def verticalLineTo(y: Vector[Double]): Paths =
-        foldLast(y)((g, c) => s"path.lineTo(${c._1}, $g);")((c, a) => a.copy(_2 = c))
+        foldLast(y)((g, c) => fm"path.lineTo(${c._1}, $g);")((c, a) => a.copy(_2 = c))
 
       override def verticalLineToRel(y: Vector[Double]): Paths =
-        foldSum(y)((g, c) => s"path.rLineTo(0, $g);")((c, a) => a.copy(_2 = c))(_ + _)
+        foldSum(y)((g, _) => fm"path.rLineTo(0, $g);")((c, a) => a.copy(_2 = c))(_ + _)
 
       override def horizLineTo(x: Vector[Double]): Paths =
-        foldLast(x)((g, c) => s"path.lineTo($g, ${c._2});")((c, a) => a.copy(_1 = c))
+        foldLast(x)((g, c) => fm"path.lineTo($g, ${c._2});")((c, a) => a.copy(_1 = c))
 
       override def horizLineToRel(x: Vector[Double]): Paths =
-        foldSum(x)((g, c) => s"path.rLineTo($g, 0);")((c, a) => a.copy(_1 = c))(_ + _)
+        foldSum(x)((g, _) => fm"path.rLineTo($g, 0);")((c, a) => a.copy(_1 = c))(_ + _)
 
       override def cubic(params: Vector[(Coords, Coords, Coords)]): Paths =
         foldLast(params)(
-          (g, c) => s"path.cubicTo(${g._1._1}, ${g._1._2}, ${g._2._1}, ${g._2._2}, ${g._3._1}, ${g._3._2});"
-        )((c, d) => c._3)
+          (g, _) => fm"path.cubicTo(${g._1._1}, ${g._1._2}, ${g._2._1}, ${g._2._2}, ${g._3._1}, ${g._3._2});"
+        )((c, _) => c._3)
 
       override def cubicRel(params: Vector[(Coords, Coords, Coords)]): Paths =
         foldSum(params)(
-          (g, c) => s"path.rCubicTo(${g._1._1}, ${g._1._2}, ${g._2._1}, ${g._2._2}, ${g._3._1}, ${g._3._2});"
+          (g, _) => fm"path.rCubicTo(${g._1._1}, ${g._1._2}, ${g._2._1}, ${g._2._2}, ${g._3._1}, ${g._3._2});"
         )((c, d) => addCoords(c._3, d))(addThirdCoords)
 
       override def smoothCubic(params: Vector[(Coords, Coords, Coords)]): Paths =
-        State.state(AndroidCode(s"???"))
+        State.pure(in(s"???"))
 
       override def smoothCubicRel(params: Vector[(Coords, Coords, Coords)]): Paths =
-        State.state(AndroidCode(s"???"))
+        State.pure(in(s"???"))
 
       override def quad(params: Vector[(Coords, Coords)]): Paths =
         foldLast(params)(
-          (g, c) => s"path.quadTo(${g._1._1}, ${g._1._2}, ${g._2._1}, ${g._2._2});"
-        )((c, d) => c._2)
+          (g, _) => fm"path.quadTo(${g._1._1}, ${g._1._2}, ${g._2._1}, ${g._2._2});"
+        )((c, _) => c._2)
 
       override def quadRel(params: Vector[(Coords, Coords)]): Paths =
         foldSum(params)(
-          (g, c) => s"path.quadTo(${g._1._1}, ${g._1._2}, ${g._2._1}, ${g._2._2});"
+          (g, _) => fm"path.quadTo(${g._1._1}, ${g._1._2}, ${g._2._1}, ${g._2._2});"
         )((c, d) => addCoords(c._2, d))(addSecondCoords)
 
       override def elliptic(params: Vector[EllipticParam]): Paths =
-        State.state(AndroidCode(s"???"))
+        State.pure(in(s"???"))
 
       override def ellipticRel(params: Vector[EllipticParam]): Paths =
-        State.state(AndroidCode(s"???"))
+        State.pure(in(s"???"))
     }
 
-  override def includePath(paths: Paths): AndroidCode = {
-    val result = paths.eval(PathState(here = (0, 0), indentation = 1))
-    val intro: SBAction =
-      outputLine(indentation = 0, "{") |+|
-        outputLine(indentation = 1, "Path path = new Path();")
-    val outro: SBAction =
-      outputLine(indentation = 0, "}")
-    AndroidCode(intro +: result.ap :+ outro)
+  override def includePath(paths: Paths): A = {
+    val result = paths.runA(PathState(here = (0, 0), indentation = 1)).value
+    val intro: A =
+      append(
+        outputLine(in("{")),
+        outputLine(in("Path path = new Path();"), indentation = 1)
+      )
+    val outro: A =
+      outputLine(in("}"))
+    append(intro, append(result, outro))
   }
 }

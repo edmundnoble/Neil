@@ -8,11 +8,6 @@ import scala.util.Try
 
 package object xmlparse {
 
-  trait Model {
-    val label: String
-    def apply[A](elem: xml.Elem, svg: FinalSVG[A]): Option[A]
-  }
-
   type ParseError = Exception
 
   implicit class HasAttributes(val x: xml.Elem) extends AnyVal {

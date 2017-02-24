@@ -5,12 +5,10 @@ package utils
 
 import java.io.File
 
+import io.enoble.svg2d.ast.FastMonoid
+import io.enoble.svg2d.render.{AndroidRenderer, PrintRenderer}
 import io.enoble.svg2d.xmlparse.Parse
-import io.enoble.svg2d.render.{AndroidRenderer, InitialRenderer}
-
-import scalaz._
-import Scalaz._
-import scala.io.Source
+import cats.implicits._
 
 object Timed {
   def main(args: Array[String]): Unit = {
@@ -20,13 +18,13 @@ object Timed {
     }
     val xml = scala.xml.XML.loadFile(new File(args(0)))
     var time = System.nanoTime
-    val parsed = Parse.parseAll(AndroidRenderer)(xml)
+    val parsed = Parse.parseAll(AndroidRenderer(PrintRenderer(System.out, FastMonoid.Id[String])))(xml)
     var timeAfter = System.nanoTime
     println(s"Result: $parsed")
     println(s"Time taken: ${(timeAfter - time) / 1000000.0} milliseconds")
     time = System.nanoTime
     val code =
-     parsed.flatten.map(_.asString)
+      parsed.flatten.map(_.foreach(_.apply()))
     timeAfter = System.nanoTime
     println(s"Time taken to generate code: ${(timeAfter - time) / 1000000.0} milliseconds")
     println(s"code: $code")

@@ -3,19 +3,15 @@ package enoble
 package svg2d
 
 import java.io.File
-import java.nio.file.{Files, Paths}
-import java.text.DecimalFormat
 
-import io.enoble.svg2d.ast.FinalSVG
-import io.enoble.svg2d.data.{AndroidCode, ObjectiveCCode, Renderable, SwiftCode}
-import io.enoble.svg2d.xmlparse.Parse
+import cats.Monoid
+import cats.implicits._
+import io.enoble.svg2d.ast.{FastMonoid, FinalSVG, InitialSVG}
 import io.enoble.svg2d.render._
+import io.enoble.svg2d.utils.TCPairC
+import io.enoble.svg2d.xmlparse.Parse
+import monix.eval.Coeval
 import scopt.Read
-
-import scalaz._
-import Scalaz._
-import scala.io.Source
-import scala.collection.JavaConverters._
 
 object Main {
 
@@ -57,45 +53,48 @@ object Main {
     help("help") text "prints this usage text"
   }
 
-  def parseAndRenderOutput(renderer: FinalSVG[Renderable], svgContent: xml.Elem): Option[Option[String]] = {
-    val parsed = Parse.parseAll(renderer)(svgContent)
-    parsed.map(_.map(_.asString))
+  def parseAndRenderOutput[A](renderer: FinalSVG[A], svgContent: xml.Elem): Option[Option[A]] = {
+    Parse.parseAll(renderer)(svgContent)
+  }
+
+  def runApp(config: MainConfig) = {
+    val filePath = config.inputFolder
+    val stringyOutputMonoid = PrintRenderer(System.out, FastMonoid.Id[String])
+    val renderer: FinalSVG[Vector[Coeval[Unit]]] = config.outputType match {
+      case Swift => SwiftRenderer(stringyOutputMonoid)
+      case ObjectiveC => ObjectiveCRenderer(stringyOutputMonoid)
+      case Android => AndroidRenderer(stringyOutputMonoid)
+      case Raw => InitialRenderer(PrintRenderer(System.out, FastMonoid.Vec[InitialSVG]()))
+    }
+    val isDir = filePath.isDirectory
+    if (isDir) {
+      val svgFiles = filePath.listFiles()
+      val xmlFiles = svgFiles.iterator.map(f => xml.XML.loadFile(f))
+      val parsed: List[Option[Option[Vector[Coeval[Unit]]]]] =
+        xmlFiles.map(parseAndRenderOutput(renderer, _)).toList
+      val (successes, failures) = parsed.partition(_.isDefined)
+      val successCount = successes.length
+      val failureCount = failures.length
+      val successRate = (successCount * 100) / (successCount + failureCount).toDouble
+      println(s"Successes: $successCount")
+      println(s"Failures: $failureCount")
+      println(f"Success rate: $successRate%2.2f%%")
+      val failedFiles = parsed.zipWithIndex.collect { case (Some(_), d) => svgFiles(d).getName }
+      println(s"Failed files: \n${failedFiles.mkString("\n")}")
+      println(parsed)
+    } else {
+      val xml = scala.xml.XML.loadFile(filePath)
+      val parsed = parseAndRenderOutput(renderer, xml)
+      println(parsed.map(_.getOrElse(Vector.empty).foreach(_.apply())).getOrElse {
+        "Parsing failed!"
+      })
+    }
   }
 
   def main(args: Array[String]): Unit = {
     val configParsed: Option[MainConfig] =
       parser.parse(args, MainConfig())
-    configParsed.foreach { config =>
-      val filePath = config.inputFolder
-      val renderer: FinalSVG[Renderable] = (config.outputType match {
-        case Swift => SwiftRenderer
-        case ObjectiveC => ObjectiveCRenderer
-        case Android => AndroidRenderer
-        case Raw => InitialRenderer
-      }).asInstanceOf[FinalSVG[Renderable]]
-      val isDir = filePath.isDirectory
-      if (isDir) {
-        val svgFiles = filePath.listFiles()
-        val xmlFiles = svgFiles.map(f => xml.XML.loadFile(f))
-        val parsed: List[Option[Option[String]]] = xmlFiles.map(parseAndRenderOutput(renderer, _))(collection.breakOut)
-        val (successes, failures) = parsed.partition(_.isDefined)
-        val successCount = successes.length
-        val failureCount = failures.length
-        val successRate = (successCount * 100) / (successCount + failureCount).toDouble
-        println(s"Successes: $successCount")
-        println(s"Failures: $failureCount")
-        println(f"Success rate: $successRate%2.2f%%")
-        val failedFiles = parsed.zipWithIndex.collect { case (Some(_), d) => svgFiles(d).getName }
-        println(s"Failed files: \n${failedFiles.mkString("\n")}")
-        println(parsed)
-      } else {
-        val xml = scala.xml.XML.loadFile(filePath)
-        val parsed = parseAndRenderOutput(renderer, xml)
-        println(parsed.map(_.toString).getOrElse {
-          "Parsing failed!"
-        })
-      }
-    }
+    configParsed.foreach(runApp)
   }
 }
 

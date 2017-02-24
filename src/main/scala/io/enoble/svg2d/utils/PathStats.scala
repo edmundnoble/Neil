@@ -7,8 +7,7 @@ import java.io.File
 
 import io.enoble.svg2d.xmlparse.Parse
 
-import scalaz._
-import Scalaz._
+import cats.implicits._
 
 object PathStats {
   def main(args: Array[String]): Unit = {

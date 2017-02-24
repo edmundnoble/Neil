@@ -3,33 +3,32 @@ package enoble
 package svg2d
 package xmlparse
 
+import cats.Eval
+import cats.implicits._
 import io.enoble.svg2d.ast.FinalSVG
 
 import scala.language.higherKinds
 import scala.xml.Elem
-import scalaz.Free.Trampoline
-import scalaz._
-import Scalaz._
 
 object Parse {
   def foldXml[B](f: (xml.Elem) => B)(x: xml.Elem)(z: B, app: (B, B) => B): B = {
-    def inner(x: xml.Node): Trampoline[B] = {
+    def inner(x: xml.Node): Eval[B] = {
       val res = x match {
         case x1: Elem =>
           f(x1)
         case _ =>
           z
       }
-      val tramp = x.child.foldLeft(Trampoline.delay(z)) { (acc, x) =>
+      val tramp = x.child.foldLeft(Eval.always(z)) { (acc, x) =>
         for {
-          rep <- Trampoline.suspend(inner(x))
+          rep <- Eval.defer(inner(x))
           prev <- acc
         } yield app(prev, rep)
       }
       tramp.map(app(_, res))
     }
 
-    inner(x).run
+    inner(x).value
   }
 
   def parseTree[A](svg: FinalSVG[A], f: xml.Elem => Option[Option[A]])(x: xml.Elem): Option[Option[A]] = {
@@ -42,7 +41,15 @@ object Parse {
               case x1: Elem => parseTree(svg, f)(x1)
               case _ => Some(None)
             }
-            (res1 |@| second) { (a, va) => (a |@| va) (svg.append).orElse(a).orElse(va) }
+            (res1 |@| second).map { (r, s) =>
+              r match {
+                case None => s
+                case Some(a) => s match {
+                  case None => r
+                  case Some(b) => Some(svg.append(a, b))
+                }
+              }
+            }
           }
       }
     }

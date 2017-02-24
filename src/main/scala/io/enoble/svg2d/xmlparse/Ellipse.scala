@@ -3,13 +3,9 @@ package enoble
 package svg2d
 package xmlparse
 
-
 import io.enoble.svg2d.ast.FinalSVG
-import io.enoble.svg2d.utils.Named.Named
 
 import scala.xml.Elem
-import scalaz._
-import Scalaz._
 
 object Ellipse extends Model {
   override val label: String = "ellipse"
