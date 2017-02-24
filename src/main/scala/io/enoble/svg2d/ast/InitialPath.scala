@@ -6,19 +6,19 @@ package ast
 trait InitialPath
 
 case class ClosePath() extends InitialPath
-case class MoveTo(points: Vector[Coords]) extends InitialPath
-case class MoveToRel(points: Vector[Coords]) extends InitialPath
-case class LineTo(points: Vector[Coords]) extends InitialPath
-case class LineToRel(point: Vector[Coords]) extends InitialPath
-case class VerticalLineTo(y: Vector[Double]) extends InitialPath
-case class VerticalLineToRel(y: Vector[Double]) extends InitialPath
-case class HorizLineTo(x: Vector[Double]) extends InitialPath
-case class HorizLineToRel(x: Vector[Double]) extends InitialPath
-case class Cubic(params: Vector[(Coords, Coords, Coords)]) extends InitialPath
-case class CubicRel(params: Vector[(Coords, Coords, Coords)]) extends InitialPath
-case class SmoothCubic(params: Vector[(Coords, Coords, Coords)]) extends InitialPath
-case class SmoothCubicRel(params: Vector[(Coords, Coords, Coords)]) extends InitialPath
-case class Quad(params: Vector[(Coords, Coords)]) extends InitialPath
-case class QuadRel(params: Vector[(Coords, Coords)]) extends InitialPath
-case class Elliptic(params: Vector[EllipticParam]) extends InitialPath
-case class EllipticRel(params: Vector[EllipticParam]) extends InitialPath
+case class MoveTo(x: Double, y: Double) extends InitialPath
+case class MoveToRel(dx: Double, dy: Double) extends InitialPath
+case class LineTo(x: Double, y: Double) extends InitialPath
+case class LineToRel(dx: Double, dy: Double) extends InitialPath
+case class VerticalLineTo(y: Double) extends InitialPath
+case class VerticalLineToRel(dy: Double) extends InitialPath
+case class HorizLineTo(x: Double) extends InitialPath
+case class HorizLineToRel(dx: Double) extends InitialPath
+case class Cubic(x1: Double, y1: Double, x2: Double, y2: Double, x: Double, y: Double) extends InitialPath
+case class CubicRel(x1: Double, y1: Double, x2: Double, y2: Double, dx: Double, dy: Double) extends InitialPath
+case class SmoothCubic(x2: Double, y2: Double, x: Double, y: Double) extends InitialPath
+case class SmoothCubicRel(x2: Double, y2: Double, dx: Double, dy: Double) extends InitialPath
+case class Quad(x1: Double, y1: Double, x: Double, y: Double) extends InitialPath
+case class QuadRel(x1: Double, y1: Double, dx: Double, dy: Double) extends InitialPath
+case class Elliptic(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, x: Double, y: Double) extends InitialPath
+case class EllipticRel(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, dx: Double, dy: Double) extends InitialPath

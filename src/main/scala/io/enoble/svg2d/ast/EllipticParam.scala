@@ -3,4 +3,6 @@ package enoble
 package svg2d
 package ast
 
-case class EllipticParam(r: Coords, rotX: Double, largeArc: Boolean, sweep: Boolean, p: Coords)
+case class EllipticParam(rx: Double, ry: Double,
+                         rotX: Double, largeArc: Boolean, sweep: Boolean,
+                         x: Double, y: Double)

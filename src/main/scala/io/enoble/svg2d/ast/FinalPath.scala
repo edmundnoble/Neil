@@ -13,58 +13,58 @@ trait FinalPath[A] {
 
   def closePath(): A
 
-  def moveTo(points: Vector[Coords]): A
+  def moveTo(x: Double, y: Double): A
 
-  def moveToRel(points: Vector[Coords]): A
+  def moveToRel(dx: Double, dy: Double): A
 
-  def lineTo(points: Vector[Coords]): A
+  def lineTo(x: Double, y: Double): A
 
-  def lineToRel(points: Vector[Coords]): A
+  def lineToRel(dx: Double, dy: Double): A
 
-  def verticalLineTo(y: Vector[Double]): A
+  def verticalLineTo(y: Double): A
 
-  def verticalLineToRel(y: Vector[Double]): A
+  def verticalLineToRel(dy: Double): A
 
-  def horizLineTo(y: Vector[Double]): A
+  def horizLineTo(x: Double): A
 
-  def horizLineToRel(y: Vector[Double]): A
+  def horizLineToRel(dx: Double): A
 
-  def cubic(params: Vector[(Coords, Coords, Coords)]): A
+  def cubic(x1: Double, y1: Double, x2: Double, y2: Double, x: Double, y: Double): A
 
-  def cubicRel(params: Vector[(Coords, Coords, Coords)]): A
+  def cubicRel(x1: Double, y1: Double, x2: Double, y2: Double, dx: Double, dy: Double): A
 
-  def smoothCubic(params: Vector[(Coords, Coords, Coords)]): A
+  def smoothCubic(x2: Double, y2: Double, x: Double, y: Double): A
 
-  def smoothCubicRel(params: Vector[(Coords, Coords, Coords)]): A
+  def smoothCubicRel(x2: Double, y2: Double, dx: Double, dy: Double): A
 
-  def quad(params: Vector[(Coords, Coords)]): A
+  def quad(x1: Double, y1: Double, x: Double, y: Double): A
 
-  def quadRel(params: Vector[(Coords, Coords)]): A
+  def quadRel(x1: Double, y1: Double, dx: Double, dy: Double): A
 
-  def elliptic(params: Vector[EllipticParam]): A
+  def elliptic(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, x: Double, y: Double): A
 
-  def ellipticRel(params: Vector[EllipticParam]): A
+  def ellipticRel(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, dx: Double, dy: Double): A
 
   def renderInitial(ins: Seq[InitialPath]): A =
     ins.foldLeft(empty) { (a, ip) =>
       append(a, ip match {
         case ClosePath() => closePath()
-        case MoveTo(points) => moveTo(points)
-        case MoveToRel(points) => moveToRel(points)
-        case LineTo(points) => lineTo(points)
-        case LineToRel(points) => lineToRel(points)
+        case MoveTo(x, y) => moveTo(x, y)
+        case MoveToRel(dx, dy) => moveToRel(dx, dy)
+        case LineTo(x, y) => lineTo(x, y)
+        case LineToRel(dx, dy) => lineToRel(dx, dy)
         case VerticalLineTo(y) => verticalLineTo(y)
-        case VerticalLineToRel(y) => verticalLineToRel(y)
+        case VerticalLineToRel(dy) => verticalLineToRel(dy)
         case HorizLineTo(x) => horizLineTo(x)
-        case HorizLineToRel(x) => horizLineToRel(x)
-        case Cubic(params) => cubic(params)
-        case CubicRel(params) => cubicRel(params)
-        case SmoothCubic(params) => smoothCubicRel(params)
-        case SmoothCubicRel(params) => smoothCubicRel(params)
-        case Quad(params) => quad(params)
-        case QuadRel(params) => quadRel(params)
-        case Elliptic(params) => elliptic(params)
-        case EllipticRel(params) => ellipticRel(params)
+        case HorizLineToRel(dx) => horizLineToRel(dx)
+        case Cubic(x1, y1, x2, y2, x, y) => cubic(x1, y1, x2, y2, x, y)
+        case CubicRel(x1, y1, x2, y2, dx, dy) => cubicRel(x1, y1, x2, y2, dx, dy)
+        case SmoothCubic(x2, y2, x, y) => smoothCubicRel(x2, y2, x, y)
+        case SmoothCubicRel(x2, y2, dx, dy) => smoothCubicRel(x2, y2, dx, dy)
+        case Quad(x1, y1, x, y) => quad(x1, y1, x, y)
+        case QuadRel(x1, y1, dx, dy) => quadRel(x1, y1, dx, dy)
+        case Elliptic(rx, ry, rotX, largeArc, sweep, x, y) => elliptic(rx, ry, rotX, largeArc, sweep, x, y)
+        case EllipticRel(rx, ry, rotX, largeArc, sweep, dx, dy) => ellipticRel(rx, ry, rotX, largeArc, sweep, dx, dy)
       })
     }
 

@@ -114,7 +114,7 @@ object Path extends Model {
     }
     val ellipticParam: P[EllipticParam] =
       (number ~ commaWsp ~ number ~ commaWsp ~ number ~ commaWsp ~ flag ~ commaWsp ~ flag ~ commaWsp ~ coordPair) map {
-        case (x, y, z, f, f2, coords) => EllipticParam((x, y), z, f, f2, coords)
+        case (x, y, z, f, f2, coords) => EllipticParam(x, y, z, f, f2, coords._1, coords._2)
       }
     val ellipticArgs: P[Vector[EllipticParam]] = P((ellipticParam ~ commaWsp).rep(1))
     val ellipticalArc: P[A] = P(("a" ~ space ~ ellipticArgs map pathCtx.ellipticRel) | ("A" ~ space ~ ellipticArgs map pathCtx.elliptic))
