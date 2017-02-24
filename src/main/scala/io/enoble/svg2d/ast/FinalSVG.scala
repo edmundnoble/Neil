@@ -28,7 +28,7 @@ trait FinalSVG[A] {
       case DrawCircle(x, y, r) => circle(x, y, r)
       case DrawEllipse(x, y, rx, ry) => ellipse(x, y, rx, ry)
       case DrawText(t, x, y) => text(t, x, y)
-      case DrawPath(paths) => includePath(path.renderInitial(paths))
+      case paths: DrawPath => includePath(path.renderInitial(paths.commands))
     }
     if (ins.isEmpty) empty
     else ins.tail.foldLeft(render(ins.head))((b, i) => append(b, render(i)))

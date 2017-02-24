@@ -2,7 +2,7 @@ package io
 package enoble
 package svg2d.render
 
-import cats.{Eval, Foldable}
+import cats.Eval
 import cats.data.{State, StateT}
 import cats.implicits._
 import io.enoble.svg2d.ast._
@@ -43,8 +43,9 @@ final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extend
     monoid.combine(f1, f2)
   }
 
+  // TODO: WHY DO I HAVE TO DO THIS TO MY POOR NEWLINES
   override def circle(x: Double, y: Double, r: Double): A = {
-    fm"c.drawCircle($x, $y, $r, p);\n"
+    fm"c.drawCircle($x, $y, $r, p);${"\n"}"
   }
 
   override def ellipse(x: Double, y: Double, rx: Double, ry: Double): A = {
@@ -53,8 +54,8 @@ final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extend
     val right = x + (rx / 2)
     val bottom = y - (ry / 2)
     append(
-      fm"{\n  RectF bounds = new RectF($left, $top, $right, $bottom);\n",
-      in("  c.drawOval(bounds, p);\n}\n")
+      fm"{${"\n"}    RectF bounds = new RectF($left, $top, $right, $bottom);${"\n"}",
+      in("    c.drawOval(bounds, p);\n}\n")
     )
   }
 
@@ -136,13 +137,13 @@ final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extend
         foldLast(y)((g, c) => fm"path.lineTo(${c._1}, $g);")((c, a) => a.copy(_2 = c))
 
       override def verticalLineToRel(y: Vector[Double]): Paths =
-        foldSum(y)((g, _) => fm"path.rLineTo(0, $g);")((c, a) => a.copy(_2 = c))(_ + _)
+        foldSum(y)((g, _) => fm"path.rLineTo(0.0, $g);")((c, a) => a.copy(_2 = c))(_ + _)
 
       override def horizLineTo(x: Vector[Double]): Paths =
         foldLast(x)((g, c) => fm"path.lineTo($g, ${c._2});")((c, a) => a.copy(_1 = c))
 
       override def horizLineToRel(x: Vector[Double]): Paths =
-        foldSum(x)((g, _) => fm"path.rLineTo($g, 0);")((c, a) => a.copy(_1 = c))(_ + _)
+        foldSum(x)((g, _) => fm"path.rLineTo($g, 0.0);")((c, a) => a.copy(_1 = c))(_ + _)
 
       override def cubic(params: Vector[(Coords, Coords, Coords)]): Paths =
         foldLast(params)(

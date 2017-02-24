@@ -7,7 +7,7 @@ import cats.Monoid
 
 trait FastMonoid[S, A] {
   implicit val monoid: Monoid[A]
-  // intended to be a monoid homomorphism, up to observation.
+  // intended to be a monoid homomorphism, up to observation and modulo `newline()`.
   def in(str: S): A
 }
 

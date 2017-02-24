@@ -39,7 +39,7 @@ final case class InitialRenderer[A](stringy: FastMonoid[InitialSVG, A]) extends 
     in(DrawText(text, x, y))
 
   override def includePath(paths: Vector[InitialPath]): A =
-    in(DrawPath(paths))
+    in(DrawPath(paths: _*))
 
   override val path: FinalPath[Vector[InitialPath]] = InitialPathRenderer
 }
