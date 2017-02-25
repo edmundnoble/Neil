@@ -11,6 +11,7 @@ scalacOptions ++= Seq(
   "-Ypartial-unification",
   "-Yliteral-types",
   "-feature",
+  "-deprecation",
   "-language:higherKinds",
   "-Xfatal-warnings"
 )
@@ -19,9 +20,9 @@ addCompilerPlugin("org.spire-math" %% "kind-projector" % "0.9.3")
 
 libraryDependencies += "org.typelevel" %% "cats" % "0.9.0"
 
-libraryDependencies += "io.monix" %% "monix" % "2.2.1"
+libraryDependencies += "io.monix" %% "monix" % "2.2.2"
 
-libraryDependencies += "io.monix" %% "monix-cats" % "2.2.1"
+libraryDependencies += "io.monix" %% "monix-cats" % "2.2.2"
 
 libraryDependencies += "org.scalatest" % "scalatest_2.11" % "3.0.1" % "test"
 
