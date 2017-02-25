@@ -23,7 +23,7 @@ class PathTests extends FreeSpec {
   "A simple path should be parsable" in parserTest(
     "m 25.000985,1015.208 c -0.23015,0 -0.36032,0.05 -0.55274,0.2422 l -1.6914,-1.6914 c -0.1936,-0.1936 -0.32064,-0.2422 -0.55078,-0.2422 z",
     Parsed.Success(
-      Vector[InitialPath](
+      Vector(
         MoveToRel(25.000985, 1015.208),
         CubicRel(-0.23015, 0.0, -0.36032, 0.05, -0.55274, 0.2422),
         LineToRel(-1.6914, -1.6914),
@@ -36,7 +36,7 @@ class PathTests extends FreeSpec {
   "A quadratic should be parsable" in parserTest(
     "m 0,0 q 0,0 0,0",
     Parsed.Success(
-      Vector[InitialPath](
+      Vector(
         MoveToRel(0.0, 0.0),
         QuadRel(0.0, 0.0, 0.0, 0.0)
       ),
@@ -46,7 +46,7 @@ class PathTests extends FreeSpec {
   "An elliptic should be parsable" in parserTest(
     "m 0,0 a 0,0 0 0,0 0,0",
     Parsed.Success(
-      Vector[InitialPath](
+      Vector(
         MoveToRel(0.0, 0.0),
         EllipticRel(0.0, 0.0, 0.0, largeArc = false, sweep = false, 0.0, 0.0)
       ), 21
