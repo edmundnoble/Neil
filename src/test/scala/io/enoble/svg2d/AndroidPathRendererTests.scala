@@ -77,7 +77,6 @@ class AndroidPathRendererTests extends FreeSpec {
     expectedOutput = "path.moveTo(1.0, 2.0);\npath.rCubicTo(1.0, 2.0, 3.0, 4.0, 5.0, 6.0);\n"
   )
 
-  //
   //  "SmoothCubic" in rendererTest(
   //    input = Vector(MoveTo(Vector((1.0, 2.0))), VerticalLineTo(Vector(1.0))),
   //    expectedOutput = "path.moveTo(0.0, 0.0);\npath.rLineTo(0.0, 1.0);\n"
@@ -87,7 +86,7 @@ class AndroidPathRendererTests extends FreeSpec {
   //    input = Vector(MoveTo(Vector((1.0, 2.0))), VerticalLineTo(Vector(1.0))),
   //    expectedOutput = "path.moveTo(0.0, 0.0);\npath.rLineTo(0.0, 1.0);\n"
   //  )
-  //
+
   "Quad" in rendererTest(
     input = Vector(MoveTo(1.0, 2.0), Quad(1, 2, 3, 4)),
     expectedOutput = "path.moveTo(1.0, 2.0);\npath.quadTo(1.0, 2.0, 3.0, 4.0);\n"
@@ -97,7 +96,7 @@ class AndroidPathRendererTests extends FreeSpec {
     input = Vector(MoveTo(1.0, 2.0), QuadRel(1, 2, 3, 4)),
     expectedOutput = "path.moveTo(1.0, 2.0);\npath.rQuadTo(1.0, 2.0, 3.0, 4.0);\n"
   )
-  //
+
   //  "Elliptic" in rendererTest(
   //    input = Vector(MoveTo(Vector((1.0, 2.0))), VerticalLineTo(Vector(1.0))),
   //    expectedOutput = "path.moveTo(0.0, 0.0);\npath.rLineTo(0.0, 1.0);\n"
