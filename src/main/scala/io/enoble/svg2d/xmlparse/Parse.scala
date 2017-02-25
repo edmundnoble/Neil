@@ -83,7 +83,7 @@ object Parse {
   def parseDrawable[A](svg: FinalSVG[A]): xml.Elem => Option[Option[A]] =
     elem =>
       parsers.get(elem.label).map(_.apply(elem, svg)).orElse {
-        println(s"Unrecognized element: ${elem.label}")
+//        println(s"Unrecognized element: ${elem.label}")
         None
       }
 

@@ -15,7 +15,7 @@ object Text extends Model {
       for {
         posX <- v1.getOpt("x").flatMap(_.asDouble)
         posY <- v1.getOpt("y").flatMap(_.asDouble)
-        text = v1.getOrDefault("text", "")
+        text = v1.text
       } yield ctx.text(text, posX, posY)
   }
 }

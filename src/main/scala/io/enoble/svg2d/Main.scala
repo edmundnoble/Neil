@@ -3,6 +3,7 @@ package enoble
 package svg2d
 
 import java.io.File
+import java.util.concurrent.Executors
 
 import cats.Monoid
 import cats.implicits._
@@ -10,7 +11,13 @@ import io.enoble.svg2d.ast.{FastMonoid, FinalSVG, InitialSVG}
 import io.enoble.svg2d.render._
 import io.enoble.svg2d.utils.TCPairC
 import io.enoble.svg2d.xmlparse.Parse
+import monix.eval.Task
+import monix.execution.Scheduler
+import monix.cats._
 import scopt.Read
+
+import scala.concurrent.Await
+import scala.concurrent.duration.Duration
 
 object Main {
 
@@ -63,10 +70,17 @@ object Main {
   def main(args: Array[String], transformer: FastMonoid[String, Vector[() => Unit]] => FastMonoid[String, Vector[() => Unit]]): Unit = {
     val configParsed: Option[MainConfig] =
       parser.parse(args, MainConfig())
-    configParsed.foreach(runApp(_, transformer))
+    if (configParsed.isEmpty) sys.exit(1)
+    implicit val workThreadPoolScheduler =
+      Scheduler(Executors.newFixedThreadPool(2))
+    val future =
+        runApp(configParsed.get, transformer).runAsync(Scheduler.global)
+    Await.result(future, Duration.Inf)
+    workThreadPoolScheduler.shutdown()
   }
 
-  def runApp(config: MainConfig, transformer: FastMonoid[String, Vector[() => Unit]] => FastMonoid[String, Vector[() => Unit]]) = {
+  def runApp(config: MainConfig,
+             transformer: FastMonoid[String, Vector[() => Unit]] => FastMonoid[String, Vector[() => Unit]])(implicit workThreadPoolScheduler: Scheduler): Task[Unit] = {
     val filePath = config.inputFolder
     val stringyOutputMonoid = transformer(PrintRenderer(System.out, FastMonoid.Id[String]))
     val renderer: FinalSVG[Vector[() => Unit]] = config.outputType match {
@@ -78,30 +92,42 @@ object Main {
     runWithRenderer(filePath, renderer)
   }
 
-  def runWithRenderer(filePath: File, renderer: FinalSVG[Vector[() => Unit]]): Unit = {
-    val isDir = filePath.isDirectory
-    if (isDir) {
-      val svgFiles = filePath.listFiles()
-      val xmlFiles = svgFiles.iterator.map(f => xml.XML.loadFile(f))
-      val parsed: List[Option[Option[Vector[() => Unit]]]] =
-        xmlFiles.map(Parse.parseAll(renderer)).toList
-      val (successes, failures) = parsed.partition(_.isDefined)
-      val successCount = successes.length
-      val failureCount = failures.length
-      val successRate = (successCount * 100) / (successCount + failureCount).toDouble
-      println(s"Successes: $successCount")
-      println(s"Failures: $failureCount")
-      println(f"Success rate: $successRate%2.2f%%")
-      val failedFiles = parsed.zipWithIndex.collect { case (Some(_), d) => svgFiles(d).getName }
-      println(s"Failed files: \n${failedFiles.mkString("\n")}")
-      println(parsed)
-    } else {
-      val xml = scala.xml.XML.loadFile(filePath)
-      val parsed = parseAndRenderOutput(renderer, xml)
-      parsed.map(_.getOrElse(Vector.empty).foreach(_.apply())).getOrElse {
-        println("Parsing failed!")
+  def runWithRenderer(filePath: File, renderer: FinalSVG[Vector[() => Unit]])(implicit sch: Scheduler): Task[Unit] =
+    Task.defer {
+      val isDir = filePath.isDirectory
+      if (isDir) {
+        val svgFiles = filePath.listFiles().toVector
+        for {
+          parsed <-
+          Task.wander(svgFiles)(f => Task.fork(Task.eval(Parse.parseAll(renderer)(xml.XML.loadFile(f))), sch))
+          // ultimate effect terminator
+          _ <- Task.delay(parsed.foreach(_.foreach(_.foreach(_.foreach(_())))))
+          _ <- Task.eval {
+            val (successes, failures) = parsed.partition(_.isDefined)
+            val successCount = successes.length
+            val failureCount = failures.length
+            val successRate = (successCount * 100) / (successCount + failureCount).toDouble
+            if (failureCount > 0) {
+              System.err.println(s"Successes: $successCount")
+              System.err.println(s"Failures: $failureCount")
+              System.err.println(f"Success rate: $successRate%2.2f%%")
+            }
+            val failedFiles = parsed.zipWithIndex.collect { case (Some(_), d) => svgFiles(d).getName }
+
+            if (failureCount > 0) {
+              def truncate(l: Int)(s: String) = if (s.length < l) s else s.substring(0, l) + "..."
+
+              System.err.println(s"Failed files: \n${truncate(100)(failedFiles.mkString("\n"))}")
+            }
+          }
+        } yield ()
+      } else Task.eval {
+        val xml = scala.xml.XML.loadFile(filePath)
+        val parsed = parseAndRenderOutput(renderer, xml)
+        parsed.map(_.getOrElse(Vector.empty).foreach(_.apply())).getOrElse {
+          println("Parsing failed!")
+        }
       }
     }
-  }
 }
 

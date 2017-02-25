@@ -60,7 +60,7 @@ final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extend
   }
 
   override def text(text: String, x: Double, y: Double): A = {
-    outputLine(fm"c.drawText($text, $x, $y, p);")
+    outputLine(fm"c.drawText(${"\""}$text${"\""}, $x, $y, p);")
   }
 
   @tailrec
