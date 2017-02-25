@@ -33,23 +33,27 @@ class PathTests extends FreeSpec {
       135)
   )
 
-  "A quadratic should be parsable" in parserTest(
-    "m 0,0 q 0,0 0,0",
+  "Quadratics should be parsable" in parserTest(
+    "m 0,0 q 0,0 0,0 Q 0,0 0,0",
     Parsed.Success(
       Vector(
         MoveToRel(0.0, 0.0),
-        QuadRel(0.0, 0.0, 0.0, 0.0)
+        QuadRel(0.0, 0.0, 0.0, 0.0),
+        Quad(0.0, 0.0, 0.0, 0.0)
       ),
-      15)
+      25
+    )
   )
 
-  "An elliptic should be parsable" in parserTest(
-    "m 0,0 a 0,0 0 0,0 0,0",
+  "Elliptics should be parsable" in parserTest(
+    "m 0,0 a 0,0 0 0,0 0,0 A 0,0 0 0,0 0,0",
     Parsed.Success(
       Vector(
         MoveToRel(0.0, 0.0),
-        EllipticRel(0.0, 0.0, 0.0, largeArc = false, sweep = false, 0.0, 0.0)
-      ), 21
+        EllipticRel(0.0, 0.0, 0.0, largeArc = false, sweep = false, 0.0, 0.0),
+        Elliptic(0.0, 0.0, 0.0, largeArc = false, sweep = false, 0.0, 0.0)
+      ),
+      37
     )
   )
 
