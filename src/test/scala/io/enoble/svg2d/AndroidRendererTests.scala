@@ -15,7 +15,7 @@ class AndroidRendererTests extends FreeSpec {
   "DrawText" in
     rendererTest(
       Vector(DrawText("sample_text", 1, 1)),
-      "c.drawText(sample_text, 1.0, 1.0, p);\n"
+      "c.drawText(\"sample_text\", 1.0, 1.0, p);\n"
     )
 
   "DrawEllipse" in
