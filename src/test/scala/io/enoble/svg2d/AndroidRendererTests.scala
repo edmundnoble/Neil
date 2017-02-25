@@ -32,12 +32,7 @@ class AndroidRendererTests extends FreeSpec {
 
   "DrawPath" in
     rendererTest(
-      Vector(
-        DrawPath(
-          MoveTo(Vector((1, 1))),
-          VerticalLineTo(Vector(2))
-        )
-      ),
+      Vector(DrawPath(MoveTo(1, 1), VerticalLineTo(2))),
       "{\n    Path path = new Path();\n    path.moveTo(1.0, 1.0);\n    path.lineTo(1.0, 2.0);\n}\n")
 
   "DrawPath empty" in rendererTest(

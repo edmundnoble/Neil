@@ -48,7 +48,7 @@ trait FinalPath[A] {
   def renderInitial(ins: Seq[InitialPath]): A =
     ins.foldLeft(empty) { (a, ip) =>
       append(a, ip match {
-        case ClosePath() => closePath()
+        case ClosePath => closePath()
         case MoveTo(x, y) => moveTo(x, y)
         case MoveToRel(dx, dy) => moveToRel(dx, dy)
         case LineTo(x, y) => lineTo(x, y)
@@ -83,54 +83,53 @@ object FinalPath {
           override def closePath(): B =
             f(fa.closePath())
 
-          override def moveTo(points: Vector[(Double, Double)]): B =
-            f(fa.moveTo(points))
+          override def moveTo(x: Double, y: Double): B =
+            f(fa.moveTo(x, y))
 
-          override def moveToRel(points: Vector[(Double, Double)]): B =
-            f(fa.moveToRel(points))
+          override def moveToRel(dx: Double, dy: Double): B =
+            f(fa.moveToRel(dx, dy))
 
-          override def lineTo(points: Vector[(Double, Double)]): B =
-            f(fa.lineTo(points))
+          override def lineTo(x: Double, y: Double): B =
+            f(fa.lineTo(x, y))
 
-          override def lineToRel(points: Vector[(Double, Double)]): B =
-            f(fa.lineToRel(points))
+          override def lineToRel(dx: Double, dy: Double): B =
+            f(fa.lineToRel(dx, dy))
 
-          override def verticalLineTo(y: Vector[Double]): B =
+          override def verticalLineTo(y: Double): B =
             f(fa.verticalLineTo(y))
 
-          override def verticalLineToRel(y: Vector[Double]): B =
-            f(fa.verticalLineToRel(y))
+          override def verticalLineToRel(dy: Double): B =
+            f(fa.verticalLineToRel(dy))
 
-          override def horizLineTo(y: Vector[Double]): B =
-            f(fa.horizLineTo(y))
+          override def horizLineTo(x: Double): B =
+            f(fa.horizLineTo(x))
 
-          override def horizLineToRel(y: Vector[Double]): B =
-            f(fa.horizLineToRel(y))
+          override def horizLineToRel(dx: Double): B =
+            f(fa.horizLineToRel(dx))
 
-          override def cubic(params: Vector[((Double, Double), (Double, Double), (Double, Double))]): B =
-            f(fa.cubic(params))
+          override def cubic(x1: Double, y1: Double, x2: Double, y2: Double, x: Double, y: Double): B =
+            f(fa.cubic(x1, y1, x2, y2, x, y))
 
-          override def cubicRel(params: Vector[((Double, Double), (Double, Double), (Double, Double))]): B =
-            f(fa.cubicRel(params))
+          override def cubicRel(x1: Double, y1: Double, x2: Double, y2: Double, dx: Double, dy: Double): B =
+            f(fa.cubicRel(x1, y1, x2, y2, dx, dy))
 
-          override def smoothCubic(params: Vector[((Double, Double), (Double, Double), (Double, Double))]): B =
-            f(fa.smoothCubic(params))
+          override def smoothCubic(x2: Double, y2: Double, x: Double, y: Double): B =
+            f(fa.smoothCubic(x2, y2, x, y))
 
-          override def smoothCubicRel(params: Vector[((Double, Double), (Double, Double), (Double, Double))]): B =
-            f(fa.smoothCubicRel(params))
+          override def smoothCubicRel(x2: Double, y2: Double, dx: Double, dy: Double): B =
+            f(fa.smoothCubicRel(x2, y2, dx, dy))
 
-          override def quad(params: Vector[((Double, Double), (Double, Double))]): B =
-            f(fa.quad(params))
+          override def quad(x1: Double, y1: Double, x: Double, y: Double): B =
+            f(fa.quad(x1, y1, x, y))
 
-          override def quadRel(params: Vector[((Double, Double), (Double, Double))]): B =
-            f(fa.quadRel(params))
+          override def quadRel(x1: Double, y1: Double, dx: Double, dy: Double): B =
+            f(fa.quadRel(x1, y1, dx, dy))
 
-          override def elliptic(params: Vector[EllipticParam]): B =
-            f(fa.elliptic(params))
+          override def elliptic(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, x: Double, y: Double): B =
+            f(fa.elliptic(rx, ry, rotX, largeArc, sweep, x, y))
 
-          override def ellipticRel(params: Vector[EllipticParam]): B =
-            f(fa.ellipticRel(params))
-
+          override def ellipticRel(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, dx: Double, dy: Double): B =
+            f(fa.ellipticRel(rx, ry, rotX, largeArc, sweep, dx, dy))
         }
 
       override def product[A, B](fa: FinalPath[A], fb: FinalPath[B]): FinalPath[(A, B)] =
@@ -144,53 +143,53 @@ object FinalPath {
           override def closePath(): (A, B) =
             (fa.closePath(), fb.closePath())
 
-          override def moveTo(points: Vector[(Double, Double)]): (A, B) =
-            (fa.moveTo(points), fb.moveTo(points))
+          override def moveTo(x: Double, y: Double): (A, B) =
+            (fa.moveTo(x, y), fb.moveTo(x, y))
 
-          override def moveToRel(points: Vector[(Double, Double)]): (A, B) =
-            (fa.moveToRel(points), fb.moveToRel(points))
+          override def moveToRel(dx: Double, dy: Double): (A, B) =
+            (fa.moveToRel(dx, dy), fb.moveToRel(dx, dy))
 
-          override def lineTo(points: Vector[(Double, Double)]): (A, B) =
-            (fa.lineTo(points), fb.lineTo(points))
+          override def lineTo(x: Double, y: Double): (A, B) =
+            (fa.lineTo(x, y), fb.lineTo(x, y))
 
-          override def lineToRel(points: Vector[(Double, Double)]): (A, B) =
-            (fa.lineToRel(points), fb.lineToRel(points))
+          override def lineToRel(dx: Double, dy: Double): (A, B) =
+            (fa.lineToRel(dx, dy), fb.lineToRel(dx, dy))
 
-          override def verticalLineTo(y: Vector[Double]): (A, B) =
+          override def verticalLineTo(y: Double): (A, B) =
             (fa.verticalLineTo(y), fb.verticalLineTo(y))
 
-          override def verticalLineToRel(y: Vector[Double]): (A, B) =
-            (fa.verticalLineToRel(y), fb.verticalLineToRel(y))
+          override def verticalLineToRel(dy: Double): (A, B) =
+            (fa.verticalLineToRel(dy), fb.verticalLineToRel(dy))
 
-          override def horizLineTo(y: Vector[Double]): (A, B) =
-            (fa.horizLineTo(y), fb.horizLineTo(y))
+          override def horizLineTo(x: Double): (A, B) =
+            (fa.horizLineTo(x), fb.horizLineTo(x))
 
-          override def horizLineToRel(y: Vector[Double]): (A, B) =
-            (fa.horizLineToRel(y), fb.horizLineToRel(y))
+          override def horizLineToRel(dx: Double): (A, B) =
+            (fa.horizLineToRel(dx), fb.horizLineToRel(dx))
 
-          override def cubic(params: Vector[((Double, Double), (Double, Double), (Double, Double))]): (A, B) =
-            (fa.cubic(params), fb.cubic(params))
+          override def cubic(x1: Double, y1: Double, x2: Double, y2: Double, x: Double, y: Double): (A, B) =
+            (fa.cubic(x1, y1, x2, y2, x, y), fb.cubic(x1, y1, x2, y2, x, y))
 
-          override def cubicRel(params: Vector[((Double, Double), (Double, Double), (Double, Double))]): (A, B) =
-            (fa.cubicRel(params), fb.cubicRel(params))
+          override def cubicRel(x1: Double, y1: Double, x2: Double, y2: Double, dx: Double, dy: Double): (A, B) =
+            (fa.cubicRel(x1, y1, x2, y2, dx, dy), fb.cubicRel(x1, y1, x2, y2, dx, dy))
 
-          override def smoothCubic(params: Vector[((Double, Double), (Double, Double), (Double, Double))]): (A, B) =
-            (fa.smoothCubic(params), fb.smoothCubic(params))
+          override def smoothCubic(x2: Double, y2: Double, x: Double, y: Double): (A, B) =
+            (fa.smoothCubic(x2, y2, x, y), fb.smoothCubic(x2, y2, x, y))
 
-          override def smoothCubicRel(params: Vector[((Double, Double), (Double, Double), (Double, Double))]): (A, B) =
-            (fa.smoothCubicRel(params), fb.smoothCubicRel(params))
+          override def smoothCubicRel(x2: Double, y2: Double, dx: Double, dy: Double): (A, B) =
+            (fa.smoothCubicRel(x2, y2, dx, dy), fb.smoothCubicRel(x2, y2, dx, dy))
 
-          override def quad(params: Vector[((Double, Double), (Double, Double))]): (A, B) =
-            (fa.quad(params), fb.quad(params))
+          override def quad(x1: Double, y1: Double, x: Double, y: Double): (A, B) =
+            (fa.quad(x1, y1, x, y), fb.quad(x1, x1, x, y))
 
-          override def quadRel(params: Vector[((Double, Double), (Double, Double))]): (A, B) =
-            (fa.quadRel(params), fb.quadRel(params))
+          override def quadRel(x1: Double, y1: Double, dx: Double, dy: Double): (A, B) =
+            (fa.quadRel(x1, x1, dx, dy), fb.quadRel(x1, x1, dx, dy))
 
-          override def elliptic(params: Vector[EllipticParam]): (A, B) =
-            (fa.elliptic(params), fb.elliptic(params))
+          override def elliptic(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, x: Double, y: Double): (A, B) =
+            (fa.elliptic(rx, ry, rotX, largeArc, sweep, x, y), fb.elliptic(rx, ry, rotX, largeArc, sweep, x, y))
 
-          override def ellipticRel(params: Vector[EllipticParam]): (A, B) =
-            (fa.ellipticRel(params), fb.ellipticRel(params))
+          override def ellipticRel(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, dx: Double, dy: Double): (A, B) =
+            (fa.ellipticRel(rx, ry, rotX, largeArc, sweep, dx, dy), fb.ellipticRel(rx, ry, rotX, largeArc, sweep, dx, dy))
         }
     }
 

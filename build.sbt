@@ -23,7 +23,7 @@ libraryDependencies += "io.monix" %% "monix" % "2.2.1"
 
 libraryDependencies += "io.monix" %% "monix-cats" % "2.2.1"
 
-libraryDependencies += "org.scalatest" % "scalatest_2.11" % "3.0.1"
+libraryDependencies += "org.scalatest" % "scalatest_2.11" % "3.0.1" % "test"
 
 libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % "1.0.6"
 

@@ -83,37 +83,42 @@ final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extend
     new FinalPath[Paths] {
       override val empty: Paths = State.pure(self.empty)
 
-      def foldLast[C](vec: Vector[C])(con: (C, Coords) => A)(out: (C, Coords) => Coords): Paths =
-        if (vec.isEmpty) empty
-        else State[PathState, A](state =>
-          (state.copy(here = out(vec.last, state.here)),
-            vec.foldMap(v => outputLine(con(v, state.here), indentation = state.indentation)))
-        )
+      @inline
+      private def outputLineS(code: Coords => A, stateChange: Coords => Coords): Paths =
+        State[PathState, A] { state =>
+          val newHere = stateChange(state.here)
+          (state.copy(here = newHere),
+            self.append(indent(code(state.here), state.indentation), in("\n"))
+          )
+        }
 
-      // assumes as an optimization that none of the intermediate coords changes can be observed by `out` or `con`.
-      // this is always the case because if we are folding a vector of arguments for the same command, the arguments
-      // must all observe and modify the same coordinates and none observe and modify the same coordinate.
-      def foldSum[C](vec: Vector[C])(con: (C, Coords) => A)(out: (C, Coords) => Coords)(add: (C, C) => C): Paths =
-      if (vec.isEmpty) empty
-      else State[PathState, A](state =>
-        (state.copy(here = out(vec.reduce(add), state.here)),
-          vec.foldMap(v => outputLine(con(v, state.here), indentation = state.indentation)))
-      )
-
-      def addCoords(p1: Coords, p2: Coords): Coords =
+      @inline
+      private def addCoords(p1: Coords, p2: Coords): Coords =
         (p1._1 + p2._1, p1._2 + p2._2)
 
-      def addThirdCoords(p1: (Coords, Coords, Coords), p2: (Coords, Coords, Coords)): (Coords, Coords, Coords) =
+      @inline
+      private def addThirdCoords(p1: (Coords, Coords, Coords), p2: (Coords, Coords, Coords)): (Coords, Coords, Coords) =
         (p1._1, p1._2, (p1._3._1 + p2._3._1, p1._3._2 + p2._3._2))
 
-      def addSecondCoords(p1: (Coords, Coords), p2: (Coords, Coords)): (Coords, Coords) =
+      @inline
+      private def addSecondCoords(p1: (Coords, Coords), p2: (Coords, Coords)): (Coords, Coords) =
         (p1._1, (p1._2._1 + p2._2._1, p1._2._2 + p2._2._2))
 
-      def addXCoords(p1: Coords, p2: Coords): Coords =
-        (p1._1 + p2._1, p1._2)
+      @inline
+      private def addXCoords(dx: Double, coords: Coords): Coords =
+        (coords._1 + dx, coords._2)
 
-      def addYCoords(p1: Coords, p2: Coords): Coords =
-        (p1._1, p1._2 + p2._2)
+      @inline
+      private def addYCoords(dy: Double, coords: Coords): Coords =
+        (coords._1, coords._2 + dy)
+
+      @inline
+      private def setXCoords(x: Double, coords: Coords): Coords =
+        (x, coords._2)
+
+      @inline
+      private def setYCoords(y: Double, coords: Coords): Coords =
+        (coords._1, y)
 
       override def append(fst: Paths, snd: Paths): Paths =
         StateT.catsDataMonadForStateT[Eval, PathState].map2(fst, snd)(self.append)
@@ -121,61 +126,54 @@ final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extend
       override def closePath(): Paths =
         State[PathState, A](state => (state, outputLine(in("path.close();"), state.indentation)))
 
-      override def moveTo(points: Vector[Coords]): Paths =
-        foldLast(points) { case ((x, y), _) => fm"path.moveTo($x, $y);" }((c, _) => c)
+      override def moveTo(x: Double, y: Double): Paths =
+        outputLineS(_ => fm"path.moveTo($x, $y);", _ => (x, y))
 
-      override def moveToRel(points: Vector[Coords]): Paths =
-        foldSum(points) { case ((x, y), _) => fm"path.rMoveTo($x, $y);" }(addCoords)(addCoords)
+      override def moveToRel(dx: Double, dy: Double): Paths =
+        outputLineS(_ => fm"path.rMoveTo($dx, $dy);", addCoords(_, (dx, dy)))
 
-      override def lineTo(points: Vector[Coords]): Paths =
-        foldLast(points) { case ((x, y), _) => fm"path.lineTo($x, $y);" }((c, _) => c)
+      override def lineTo(x: Double, y: Double): Paths =
+        outputLineS(_ => fm"path.lineTo($x, $y);", _ => (x, y))
 
-      override def lineToRel(points: Vector[Coords]): Paths =
-        foldSum(points) { case ((x, y), _) => fm"path.rLineTo($x, $y);" }(addCoords)(addCoords)
+      override def lineToRel(dx: Double, dy: Double): Paths =
+        outputLineS(_ => fm"path.rLineTo($dx, $dy);", addCoords(_, (dx, dy)))
 
-      override def verticalLineTo(y: Vector[Double]): Paths =
-        foldLast(y)((g, c) => fm"path.lineTo(${c._1}, $g);")((c, a) => a.copy(_2 = c))
+      override def verticalLineTo(y: Double): Paths =
+        outputLineS({ case (x, _) => fm"path.lineTo($x, $y);" }, setYCoords(y, _))
 
-      override def verticalLineToRel(y: Vector[Double]): Paths =
-        foldSum(y)((g, _) => fm"path.rLineTo(0.0, $g);")((c, a) => a.copy(_2 = c))(_ + _)
+      override def verticalLineToRel(dy: Double): Paths =
+        outputLineS(_ => fm"path.rLineTo(0.0, $dy);", addYCoords(dy, _))
 
-      override def horizLineTo(x: Vector[Double]): Paths =
-        foldLast(x)((g, c) => fm"path.lineTo($g, ${c._2});")((c, a) => a.copy(_1 = c))
+      override def horizLineTo(x: Double): Paths =
+        outputLineS({ case (_, y) => fm"path.lineTo($x, $y);" }, setXCoords(x, _))
 
-      override def horizLineToRel(x: Vector[Double]): Paths =
-        foldSum(x)((g, _) => fm"path.rLineTo($g, 0.0);")((c, a) => a.copy(_1 = c))(_ + _)
+      override def horizLineToRel(dx: Double): Paths =
+        outputLineS(_ => fm"path.rLineTo($dx, 0.0);", addXCoords(dx, _))
 
-      override def cubic(params: Vector[(Coords, Coords, Coords)]): Paths =
-        foldLast(params)(
-          (g, _) => fm"path.cubicTo(${g._1._1}, ${g._1._2}, ${g._2._1}, ${g._2._2}, ${g._3._1}, ${g._3._2});"
-        )((c, _) => c._3)
+      override def cubic(x1: Double, y1: Double, x2: Double, y2: Double, x: Double, y: Double): Paths =
+        outputLineS(_ => fm"path.cubicTo($x1, $y1, $x2, $y2, $x, $y);", _ => (x, y))
 
-      override def cubicRel(params: Vector[(Coords, Coords, Coords)]): Paths =
-        foldSum(params)(
-          (g, _) => fm"path.rCubicTo(${g._1._1}, ${g._1._2}, ${g._2._1}, ${g._2._2}, ${g._3._1}, ${g._3._2});"
-        )((c, d) => addCoords(c._3, d))(addThirdCoords)
+      override def cubicRel(x1: Double, y1: Double, x2: Double, y2: Double, dx: Double, dy: Double): Paths =
+        outputLineS(_ => fm"path.rCubicTo($x1, $y1, $x2, $y2, $dx, $dy);", addCoords(_, (dx, dy)))
 
-      override def smoothCubic(params: Vector[(Coords, Coords, Coords)]): Paths =
+      override def smoothCubic(x2: Double, y2: Double, x: Double, y: Double): Paths =
         State.pure(in(s"???"))
 
-      override def smoothCubicRel(params: Vector[(Coords, Coords, Coords)]): Paths =
+      override def smoothCubicRel(x2: Double, y2: Double, dx: Double, dy: Double): Paths =
         State.pure(in(s"???"))
 
-      override def quad(params: Vector[(Coords, Coords)]): Paths =
-        foldLast(params)(
-          (g, _) => fm"path.quadTo(${g._1._1}, ${g._1._2}, ${g._2._1}, ${g._2._2});"
-        )((c, _) => c._2)
+      override def quad(x1: Double, y1: Double, x: Double, y: Double): Paths =
+        outputLineS(_ => fm"path.quadTo($x1, $y1, $x, $y);", _ => (x, y))
 
-      override def quadRel(params: Vector[(Coords, Coords)]): Paths =
-        foldSum(params)(
-          (g, _) => fm"path.quadTo(${g._1._1}, ${g._1._2}, ${g._2._1}, ${g._2._2});"
-        )((c, d) => addCoords(c._2, d))(addSecondCoords)
+      override def quadRel(x1: Double, y1: Double, dx: Double, dy: Double): Paths =
+        outputLineS(_ => fm"path.rQuadTo($x1, $y1, $dx, $dy);", addCoords((dx, dy), _))
 
-      override def elliptic(params: Vector[EllipticParam]): Paths =
+      override def elliptic(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, x: Double, y: Double): State[PathState, A] =
         State.pure(in(s"???"))
 
-      override def ellipticRel(params: Vector[EllipticParam]): Paths =
+      override def ellipticRel(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, dx: Double, dy: Double): State[PathState, A] =
         State.pure(in(s"???"))
+
     }
 
   override def includePath(paths: Paths): A = {

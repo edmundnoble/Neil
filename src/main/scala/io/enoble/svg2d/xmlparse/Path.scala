@@ -9,9 +9,10 @@ import io.enoble.svg2d.ast._
 
 import scala.collection.immutable.VectorBuilder
 import scala.collection.mutable
-
 import cats.instances.vector._
 import cats.syntax.foldable._
+
+import scala.annotation.switch
 
 object Path extends Model {
 
@@ -47,21 +48,22 @@ object Path extends Model {
       override def toString() = name
     }
 
-    implicit def vectorRepeater[R]: Repeater[R, Vector[R]] = new Repeater[R, Vector[R]] {
-      override type Acc = mutable.Builder[R, Vector[R]]
-
-      override def initial: Acc = Vector.newBuilder[R]
-
-      override def accumulate(t: R, acc: Acc): Unit = acc += t
-
-      override def result(acc: Acc): Vector[R] = acc.result()
-    }
+    //
+    //    implicit def vectorRepeater[R]: Repeater[R, Vector[R]] = new Repeater[R, Vector[R]] {
+    //      override type Acc = mutable.Builder[R, Vector[R]]
+    //
+    //      override def initial: Acc = Vector.newBuilder[R]
+    //
+    //      override def accumulate(t: R, acc: Acc): Unit = acc += t
+    //
+    //      override def result(acc: Acc): Vector[R] = acc.result()
+    //    }
 
     class PathBuilder {
       var soFar: A = pathCtx.empty
     }
 
-    def pathRepeater: Repeater[A, A] = new Repeater[A, A] {
+    implicit def pathRepeater: Repeater[A, A] = new Repeater[A, A] {
       override type Acc = PathBuilder
 
       override def initial: PathBuilder = new PathBuilder
@@ -90,43 +92,74 @@ object Path extends Model {
     val wspDouble = P(space ~ number)
 
     val coordPair: P[Coords] = (number ~ commaWsp) ~/ number
-    val twoCoordPairs: P[(Coords, Coords)] = P((coordPair ~ commaWsp ~ coordPair).map {
-      case (x1, y1, c1) => ((x1, y1), c1)
-    })
-    val threeCoordPairs: P[(Coords, Coords, Coords)] = P((coordPair ~ commaWsp.? ~ coordPair ~ commaWsp.? ~ coordPair).map {
-      case (x1, y1, c1, c2) => ((x1, y1), c1, c2)
-    })
-    val wspAndCoordPairs: P[(Coords, Coords)] = P(commaWsp ~ twoCoordPairs)
+    val twoCoordPairs: P[(Double, Double, Double, Double)] =
+      P(number ~ commaWsp ~/ number ~ commaWsp ~/
+        number ~ commaWsp ~/ number)
+    val threeCoordPairs: P[(Double, Double, Double, Double, Double, Double)] =
+      P(twoCoordPairs ~ commaWsp ~/ number ~ commaWsp ~/ number)
+    val wspAndCoordPairs: P[(Double, Double, Double, Double)] = P(commaWsp ~ twoCoordPairs)
     val wspAndCoord: P[Coords] = P(commaWsp ~ coordPair)
     // TODO: All of the extra arguments to moveTo should be interpreted as lineTo's, according to the spec
-    val moveToArgs = P(wspAndCoord.rep(1))
-    val moveTo: P[A] = P(("m" ~ moveToArgs map pathCtx.moveToRel) | ("M" ~ moveToArgs map pathCtx.moveTo))
-    val lineToArgs = P(moveToArgs)
-    val lineTo: P[A] = P(("L" ~ lineToArgs map pathCtx.lineTo) | ("l" ~ lineToArgs map pathCtx.lineToRel))
-    val singleLineToArgs = P((wspDouble ~ commaWsp).rep(1))
-    val horizLineTo: P[A] = P((("h" ~ singleLineToArgs) map pathCtx.horizLineToRel) | (("H" ~ singleLineToArgs) map pathCtx.horizLineTo))
-    val vertLineTo: P[A] = P((("v" ~ singleLineToArgs) map pathCtx.verticalLineToRel) | (("V" ~ singleLineToArgs) map pathCtx.verticalLineTo))
-    val quadArgs = P((twoCoordPairs ~ commaWsp.?).rep(1))
-    val quad: P[A] = P((("q" ~ space ~ quadArgs) map pathCtx.quadRel) | (("Q" ~ space ~ quadArgs) map pathCtx.quad))
-    val flag: P[Boolean] = CharIn("01").!.map {
-      case "0" => false
-      case "1" => true
-    }
-    val ellipticParam: P[EllipticParam] =
-      (number ~ commaWsp ~ number ~ commaWsp ~ number ~ commaWsp ~ flag ~ commaWsp ~ flag ~ commaWsp ~ coordPair) map {
-        case (x, y, z, f, f2, coords) => EllipticParam(x, y, z, f, f2, coords._1, coords._2)
-      }
-    val ellipticArgs: P[Vector[EllipticParam]] = P((ellipticParam ~ commaWsp).rep(1))
-    val ellipticalArc: P[A] = P(("a" ~ space ~ ellipticArgs map pathCtx.ellipticRel) | ("A" ~ space ~ ellipticArgs map pathCtx.elliptic))
-    val cubicArgs = P((threeCoordPairs ~ commaWsp).rep(1))
-    val cubic: Parser[A] = P(("c" ~ space ~ cubicArgs map pathCtx.cubicRel) | ("C" ~ space ~ cubicArgs map pathCtx.cubic))
-    val smoothCubic: Parser[A] = P(("s" ~ cubicArgs map pathCtx.smoothCubicRel) | ("S" ~ cubicArgs map pathCtx.smoothCubic))
+    val moveTo = P(
+      ("m" ~/ wspAndCoord.map((pathCtx.moveToRel _).tupled).rep(1)) |
+        ("M" ~/ wspAndCoord.map((pathCtx.moveTo _).tupled).rep(1))
+    )
+    val lineTo: P[A] = P(
+      ("L" ~ wspAndCoord.map((pathCtx.lineTo _).tupled).rep(1)) |
+        ("l" ~ wspAndCoord.map((pathCtx.lineToRel _).tupled).rep(1))
+    )
+    val singleLineToArgs: Parser[Double] = P((wspDouble ~ commaWsp))
+    val horizLineTo: P[A] = P(
+      ("h" ~ singleLineToArgs.map(pathCtx.horizLineToRel).rep(1)) |
+        ("H" ~ singleLineToArgs.map(pathCtx.horizLineTo).rep(1))
+    )
+    val vertLineTo: P[A] = P(
+      ("v" ~ singleLineToArgs.map(pathCtx.verticalLineToRel).rep(1)) |
+        ("V" ~ singleLineToArgs.map(pathCtx.verticalLineTo).rep(1))
+    )
+
+    val quadArgs = P(twoCoordPairs ~ commaWsp)
+
+    val quad: P[A] = P(
+      ("q" ~ space ~ quadArgs.map((pathCtx.quadRel _).tupled).rep(1)) |
+        ("Q" ~ space ~ quadArgs.map((pathCtx.quad _).tupled).rep(1))
+    )
+
+    val flag: P[Boolean] = CharIn("01").!.map(s => (s.charAt(0): @switch) match {
+      case '0' => false
+      case '1' => true
+    })
+
+    val ellipticParam: P[(Double, Double, Double, Boolean, Boolean, Double, Double)] =
+      number ~ commaWsp ~ number ~ commaWsp ~
+        number ~ commaWsp ~
+        flag ~ commaWsp ~ flag ~ commaWsp ~
+        number ~ commaWsp ~ number
+
+    val ellipticalArc: P[A] = P(
+      ("a" ~ space ~ ellipticParam.map((pathCtx.ellipticRel _).tupled).rep(1, sep = commaWsp)) |
+        ("A" ~ space ~ ellipticParam.map((pathCtx.elliptic _).tupled).rep(1, sep = commaWsp))
+    )
+
+    val cubic: Parser[A] = P(
+      ("c" ~ space ~ threeCoordPairs.map((pathCtx.cubicRel _).tupled).rep(1, sep = commaWsp)) |
+        ("C" ~ space ~ threeCoordPairs.map((pathCtx.cubic _).tupled).rep(1, sep = commaWsp))
+    )
+
+    val smoothCubic: Parser[A] = P(
+      ("s" ~ twoCoordPairs.map((pathCtx.smoothCubicRel _).tupled).rep(1, sep = commaWsp)) |
+        ("S" ~ twoCoordPairs.map((pathCtx.smoothCubic _).tupled).rep(1, sep = commaWsp))
+    )
+
     val closePath: Parser[A] = P(CharIn("zZ") map (_ => pathCtx.closePath()))
-    val command: Parser[A] = P(closePath | lineTo | horizLineTo | vertLineTo | cubic | smoothCubic | quad | ellipticalArc)
+
+    val command: Parser[A] = P(
+      closePath | lineTo | horizLineTo | vertLineTo | cubic | smoothCubic | quad | ellipticalArc
+    )
     val pathCommands: Parser[A] =
       P(((moveTo ~ space) ~ (command ~ space).rep(pathRepeater))
         .map((pathCtx.append _).tupled)
-        .rep(1)(pathRepeater))
+        .rep(1))
     val path: Parser[A] = P(pathCommands)
   }
 

@@ -24,11 +24,11 @@ class PathTests extends FreeSpec {
     "m 25.000985,1015.208 c -0.23015,0 -0.36032,0.05 -0.55274,0.2422 l -1.6914,-1.6914 c -0.1936,-0.1936 -0.32064,-0.2422 -0.55078,-0.2422 z",
     Parsed.Success(
       Vector[InitialPath](
-        MoveToRel(Vector((25.000985, 1015.208))),
-        CubicRel(Vector(((-0.23015, 0.0), (-0.36032, 0.05), (-0.55274, 0.2422)))),
-        LineToRel(Vector((-1.6914, -1.6914))),
-        CubicRel(Vector(((-0.1936, -0.1936), (-0.32064, -0.2422), (-0.55078, -0.2422)))),
-        ClosePath()
+        MoveToRel(25.000985, 1015.208),
+        CubicRel(-0.23015, 0.0, -0.36032, 0.05, -0.55274, 0.2422),
+        LineToRel(-1.6914, -1.6914),
+        CubicRel(-0.1936, -0.1936, -0.32064, -0.2422, -0.55078, -0.2422),
+        ClosePath
       ),
       135)
   )
@@ -37,8 +37,8 @@ class PathTests extends FreeSpec {
     "m 0,0 q 0,0 0,0",
     Parsed.Success(
       Vector[InitialPath](
-        MoveToRel(Vector((0.0, 0.0))),
-        QuadRel(Vector(((0.0, 0.0), (0.0, 0.0))))
+        MoveToRel(0.0, 0.0),
+        QuadRel(0.0, 0.0, 0.0, 0.0)
       ),
       15)
   )
@@ -47,8 +47,8 @@ class PathTests extends FreeSpec {
     "m 0,0 a 0,0 0 0,0 0,0",
     Parsed.Success(
       Vector[InitialPath](
-        MoveToRel(Vector((0.0, 0.0))),
-        EllipticRel(Vector(EllipticParam((0.0, 0.0), 0.0, largeArc = false, sweep = false, (0.0, 0.0))))
+        MoveToRel(0.0, 0.0),
+        EllipticRel(0.0, 0.0, 0.0, largeArc = false, sweep = false, 0.0, 0.0)
       ), 21
     )
   )
@@ -57,7 +57,11 @@ class PathTests extends FreeSpec {
     "m 157.86809,496.83258 0,-32.796 -5.16279,0 0,32.796 5.16279,0",
     Parsed.Success(
       Vector(
-        MoveToRel(Vector((157.86809, 496.83258), (0.0, -32.796), (-5.16279, 0.0), (0.0, 32.796), (5.16279, 0.0)))
+        MoveToRel(157.86809, 496.83258),
+        MoveToRel(0.0, -32.796),
+        MoveToRel(-5.16279, 0.0),
+        MoveToRel(0.0, 32.796),
+        MoveToRel(5.16279, 0.0)
       ), 61
     )
   )
