@@ -29,31 +29,34 @@ object Main {
 
   case object Android extends OutputType
 
-  case object Raw extends OutputType
-
   val outputTypeMapping: Map[String, Main.OutputType] = List(
     List("s", "swift") -> Swift,
     List("c", "objc", "objectivec") -> ObjectiveC,
-    List("a", "android", "j", "java") -> Android,
-    List("r", "raw") -> Raw
+    List("a", "android", "j", "java") -> Android
   ).flatMap(p => p._1.map(_ -> p._2))(collection.breakOut)
 
   def parseOutputType(str: String): OutputType =
     outputTypeMapping.getOrElse(str.toLowerCase(), throw new IllegalArgumentException(s"$str is not a valid output type: try 's', 'c', 'a', or 'r'"))
 
-  case class MainConfig(outputType: OutputType = null, inputFolder: File = null, outputFolder: Option[File] = None)
 
-  implicit val outputTypeInstances: Read[OutputType] = Read.reads(parseOutputType)
+  case class MainConfig(debug: Boolean = false,
+                        inputFolder: File = null,
+                        androidEnabled: Boolean, androidOutputFile: Option[File],
+                        iosEnabled: Boolean, iOSOutputFile: Option[File],
+                        objectiveCEnabled: Boolean, objectiveCOutputFile: Option[File])
+
+  implicit val outputTypeInstances: Read[Seq[OutputType]] = Read.seqRead(Read.reads(parseOutputType))
 
   val parser = new scopt.OptionParser[MainConfig]("neil") {
     head("neil", "0.0.2")
     opt[OutputType]('t', "otype") required() valueName "<outputType>" action { (x, c) =>
       c.copy(outputType = x)
-    } text "output type; valid output types are 's' (Swift), 'c' (Objective C), 'a' (Android), and 'r' (Raw)"
+    } text "output type; valid output types are any combination of 's' (Swift), 'c' (Objective C), 'a' (Android)"
+    opt[Unit]("debug") optional() valueName "<debug>" action { (_, c) => c.copy(debug = true) }
     opt[File]('i', "input") required() valueName "<file>" action { (x, c) =>
       c.copy(inputFolder = x)
     } text "input svg file/folder of svg's"
-    opt[File]('o', "output") optional() valueName "<file>" action { (x, c) =>
+    opt[File]('a', "android-out") optional() valueName "<androidOut>" action { (x, c) =>
       c.copy(outputFolder = Some(x))
     } text "output code generation folder/file (or none, for stdout)"
     help("help") text "prints this usage text"
