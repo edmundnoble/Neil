@@ -59,7 +59,6 @@ final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extend
     monoid.combine(f1, f2)
   }
 
-  // TODO: WHY DO I HAVE TO DO THIS TO MY POOR NEWLINES
   override def circle(x: Double, y: Double, r: Double): A =
     outputLine(fm"c.drawCircle($x, $y, $r, p);")
 
@@ -71,6 +70,7 @@ final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extend
     outputLine(fm"c.drawOval(new RectF($left, $top, $right, $bottom), p);")
   }
 
+  // TODO: WHY DO I HAVE TO DO THIS TO MY POOR ESCAPEES
   override def text(text: String, x: Double, y: Double): A =
     outputLine(fm"c.drawText(${"\""}$text${"\""}, $x, $y, p);")
 
@@ -150,56 +150,65 @@ final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extend
           val newState =
             state.copy(
               lastQuadraticControlX = Double.NaN, lastQuadraticControlY = Double.NaN,
-              lastSecondCubicControlX = x2 + newX, lastSecondCubicControlY = y2 + newY,
+              lastSecondCubicControlX = x2 + state.hereX, lastSecondCubicControlY = y2 + state.hereY,
               hereX = newX, hereY = newY
             )
           newState
         })
 
-      override def smoothCubic(x2: Double, y2: Double, x: Double, y: Double): Paths = State { state =>
-        val newState =
-          state.copy(
-            lastQuadraticControlX = Double.NaN, lastQuadraticControlY = Double.NaN,
-            lastSecondCubicControlX = x2, lastSecondCubicControlY = y2,
-            hereX = x, hereY = y
+      override def smoothCubic(x2: Double, y2: Double, x: Double, y: Double): Paths =
+        State { state =>
+          val newState =
+            state.copy(
+              lastQuadraticControlX = Double.NaN, lastQuadraticControlY = Double.NaN,
+              lastSecondCubicControlX = x2, lastSecondCubicControlY = y2,
+              hereX = x, hereY = y
+            )
+          (newState,
+            outputLine(
+              fm"path.cubicTo(${state.hereX * 2 - state.lastSecondCubicControlX}, ${state.hereY * 2 - state.lastSecondCubicControlY}, $x2, $y2, $x, $y);",
+              indentation = state.indentation
+            )
           )
-        (newState,
-          outputLine(
-            fm"path.cubicTo(${state.hereX * 2 - state.lastSecondCubicControlX}, ${state.hereY * 2 - state.lastSecondCubicControlY}, $x2, $y2, $x, $y);",
-            indentation = state.indentation
-          )
-        )
-      }
+        }
 
-      override def smoothCubicRel(x2: Double, y2: Double, dx: Double, dy: Double): Paths = State { state =>
-        val newX = state.hereX - state.lastSecondCubicControlX
-        val newY = state.hereY - state.lastSecondCubicControlY
-        val newState =
-          state.copy(
-            lastQuadraticControlX = Double.NaN, lastQuadraticControlY = Double.NaN,
-            lastSecondCubicControlX = x2 + newX, lastSecondCubicControlY = y2 + newY,
-            hereX = newX, hereY = newY
+      override def smoothCubicRel(x2: Double, y2: Double, dx: Double, dy: Double): Paths =
+        State { state =>
+          val newControlX = state.hereX - state.lastSecondCubicControlX
+          val newControlY = state.hereY - state.lastSecondCubicControlY
+          val newState =
+            state.copy(
+              lastQuadraticControlX = Double.NaN, lastQuadraticControlY = Double.NaN,
+              lastSecondCubicControlX = x2 + state.hereX, lastSecondCubicControlY = y2 + state.hereY,
+              hereX = state.hereX + dx, hereY = state.hereY + dy
+            )
+          (newState,
+            outputLine(
+              fm"path.rCubicTo($newControlX, $newControlY, $x2, $y2, $dx, $dy);",
+              indentation = state.indentation
+            )
           )
-        (newState,
-          outputLine(
-            fm"path.rCubicTo(${state.lastSecondCubicControlX - state.hereX}, ${state.lastSecondCubicControlY - state.hereY}, $x2, $y2, $dx, $dy);",
-            indentation = state.indentation
-          )
-        )
-      }
+        }
 
       override def quad(x1: Double, y1: Double, x: Double, y: Double): Paths =
         outputLineS(
           _ => fm"path.quadTo($x1, $y1, $x, $y);",
           _.copy(
             hereX = x, hereY = y,
-            lastQuadraticControlX = x1, lastQuadraticControlY = y1
+            lastQuadraticControlX = x1, lastQuadraticControlY = y1,
+            lastSecondCubicControlX = Double.NaN, lastSecondCubicControlY = Double.NaN
           )
         )
 
       override def quadRel(x1: Double, y1: Double, dx: Double, dy: Double): Paths = State(state =>
-        (state.addToHere(dx, dy).copy(lastQuadraticControlX = state.hereX + x1, lastQuadraticControlY = state.hereY + y1),
-        outputLine(fm"path.rQuadTo($x1, $y1, $dx, $dy);", indentation = state.indentation))
+        (state.copy(
+          hereX = state.hereX + dx, hereY = state.hereY + dy,
+          lastQuadraticControlX = state.hereX + x1, lastQuadraticControlY = state.hereY + y1,
+          lastSecondCubicControlX = Double.NaN, lastSecondCubicControlY = Double.NaN
+        ), outputLine(
+          fm"path.rQuadTo($x1, $y1, $dx, $dy);",
+          indentation = state.indentation
+        ))
       )
 
       override def smoothQuad(x: Double, y: Double): Paths = State { state =>
@@ -222,14 +231,16 @@ final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extend
           hereX = state.hereX + dx, hereY = state.hereY + dy,
           lastQuadraticControlX = newControlX, lastQuadraticControlY = newControlY,
           lastSecondCubicControlX = Double.NaN, lastSecondCubicControlY = Double.NaN
-        ), outputLine(fm"path.rQuadTo($newControlX, $newControlY, $dx, $dy);", indentation = state.indentation))
+        ), outputLine(
+          fm"path.rQuadTo($newControlX, $newControlY, $dx, $dy);", indentation = state.indentation
+        ))
       }
 
       override def elliptic(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, x: Double, y: Double): State[PathState, A] =
-        State.pure(in(s"???"))
+        State.pure(outputLine(fm"???"))
 
       override def ellipticRel(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, dx: Double, dy: Double): State[PathState, A] =
-        State.pure(in(s"???"))
+        State.pure(outputLine(fm"???"))
 
     }
 

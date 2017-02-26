@@ -91,12 +91,12 @@ class AndroidPathRendererTests extends FreeSpec {
     )
   }
 
-//  "SmoothCubicRel" - {
-//    "basic" in rendererTest(
-//      input = Vector(MoveTo(1.0, 2.0), CubicRel(1.0, 2.0, 3.0, 4.0, 5.0, 6.0)),
-//      expectedOutput = "path.moveTo(0.0, 0.0);\npath.rLineTo(0.0, 1.0);\n"
-//    )
-//  }
+  "SmoothCubicRel" - {
+    "basic" in rendererTest(
+      input = Vector(MoveTo(100.0, 200.0), CubicRel(100, 100, 250, 100, 250, 200), SmoothCubicRel(100, 100, 250, 100)),
+      expectedOutput = "path.moveTo(100.0, 200.0);\npath.rCubicTo(100.0, 100.0, 250.0, 100.0, 250.0, 200.0);\npath.rCubicTo(0.0, 100.0, 100.0, 100.0, 250.0, 100.0);\n"
+    )
+  }
 
   "Quad" in rendererTest(
     input = Vector(MoveTo(1.0, 2.0), Quad(1, 2, 3, 4)),
@@ -113,11 +113,10 @@ class AndroidPathRendererTests extends FreeSpec {
     expectedOutput = "path.moveTo(1.0, 2.0);\npath.quadTo(1.0, 2.0, 3.0, 4.0);\npath.quadTo(5.0, 6.0, 5.0, 6.0);\n"
   )
 
-//  "SmoothQuadRel" in rendererTest(
-//    input = Vector(MoveTo(1.0, 2.0), QuadRel(1, 2, 3, 4), SmoothQuadRel(5, 6)),
-//    expectedOutput = "path.moveTo(1.0, 2.0);\npath.rQuadTo(1.0, 2.0, 3.0, 4.0);\npath.rQuadTo(0.0, 2.0, 5.0, 6.0);\n"
-//  )
-
+  "SmoothQuadRel" in rendererTest(
+    input = Vector(MoveTo(1.0, 2.0), QuadRel(1, 2, 3, 4), SmoothQuadRel(5, 6)),
+    expectedOutput = "path.moveTo(1.0, 2.0);\npath.rQuadTo(1.0, 2.0, 3.0, 4.0);\npath.rQuadTo(2.0, 2.0, 5.0, 6.0);\n"
+  )
 
   //  "Elliptic" in rendererTest(
   //    input = Vector(MoveTo(Vector((1.0, 2.0))), VerticalLineTo(Vector(1.0))),
