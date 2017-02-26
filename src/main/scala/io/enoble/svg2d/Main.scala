@@ -52,10 +52,10 @@ object Main {
     } text "output type; valid output types are 's' (Swift), 'c' (Objective C), 'a' (Android), and 'r' (Raw)"
     opt[File]('i', "input") required() valueName "<file>" action { (x, c) =>
       c.copy(inputFolder = x)
-    } text "input folder of svg's"
+    } text "input svg file/folder of svg's"
     opt[File]('o', "output") optional() valueName "<file>" action { (x, c) =>
       c.copy(outputFolder = Some(x))
-    } text "output code generation folder (or none, for stdout)"
+    } text "output code generation folder/file (or none, for stdout)"
     help("help") text "prints this usage text"
   }
 
