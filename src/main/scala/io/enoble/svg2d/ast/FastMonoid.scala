@@ -7,7 +7,7 @@ import cats.Monoid
 
 trait FastMonoid[S, A] {
   implicit val monoid: Monoid[A]
-  // intended to be a monoid homomorphism, up to observation and modulo `newline()`.
+  // intended to be a monoid homomorphism, up to observation.
   def in(str: S): A
 }
 
@@ -17,6 +17,13 @@ object FastMonoid {
 
   final case class Id[A]()(implicit override val monoid: Monoid[A]) extends FastMonoid[A, A] {
     override def in(a: A): A = a
+  }
+
+  final case class ToString[A]() extends FastMonoid[A, Vector[String]] {
+    override implicit val monoid: Monoid[Vector[String]] =
+      cats.instances.vector.catsKernelStdMonoidForVector[String]
+
+    override def in(a: A): Vector[String] = Vector.empty :+ a.toString
   }
 
   final case class Vec[A]() extends FastMonoid[A, Vector[A]] {

@@ -59,6 +59,8 @@ object Main {
     help("help") text "prints this usage text"
   }
 
+  // a) separate outputs for each output type
+
   def parseAndRenderOutput[A](renderer: FinalSVG[A], svgContent: xml.Elem): Option[Option[A]] = {
     Parse.parseAll(renderer)(svgContent)
   }
@@ -67,7 +69,7 @@ object Main {
     main(args, identity)
   }
 
-  def main(args: Array[String], transformer: FastMonoid[String, Vector[() => Unit]] => FastMonoid[String, Vector[() => Unit]]): Unit = {
+  def main(args: Array[String], transformer: FastMonoid[String, Vector[String]] => FastMonoid[String, Vector[String]]): Unit = {
     val configParsed: Option[MainConfig] =
       parser.parse(args, MainConfig())
     if (configParsed.isEmpty) sys.exit(1)
@@ -80,19 +82,20 @@ object Main {
   }
 
   def runApp(config: MainConfig,
-             transformer: FastMonoid[String, Vector[() => Unit]] => FastMonoid[String, Vector[() => Unit]])(implicit workThreadPoolScheduler: Scheduler): Task[Unit] = {
+             transformer: FastMonoid[String, Vector[String]] => FastMonoid[String, Vector[String]])(implicit workThreadPoolScheduler: Scheduler): Task[Unit] = {
     val filePath = config.inputFolder
-    val stringyOutputMonoid = transformer(PrintRenderer(System.out, FastMonoid.Id[String]))
-    val renderer: FinalSVG[Vector[() => Unit]] = config.outputType match {
+    val stringyOutputMonoid: FastMonoid[String, Vector[String]] =
+      transformer(FastMonoid.Vec[String])
+    val renderer: FinalSVG[Vector[String]] = config.outputType match {
       case Swift => SwiftRenderer(stringyOutputMonoid)
       case ObjectiveC => ObjectiveCRenderer(stringyOutputMonoid)
       case Android => AndroidRenderer(stringyOutputMonoid)
-      case Raw => InitialRenderer(PrintRenderer(System.out, FastMonoid.Vec[InitialSVG]()))
+      case Raw => InitialRenderer(FastMonoid.ToString[InitialSVG]())
     }
     runWithRenderer(filePath, renderer)
   }
 
-  def runWithRenderer(filePath: File, renderer: FinalSVG[Vector[() => Unit]])(implicit sch: Scheduler): Task[Unit] =
+  def runWithRenderer(filePath: File, renderer: FinalSVG[Vector[String]])(implicit sch: Scheduler): Task[Unit] =
     Task.defer {
       val isDir = filePath.isDirectory
       if (isDir) {
@@ -101,7 +104,7 @@ object Main {
           parsed <-
           Task.wander(svgFiles)(f => Task.fork(Task.eval(Parse.parseAll(renderer)(xml.XML.loadFile(f))), sch))
           // ultimate effect terminator
-          _ <- Task.delay(parsed.foreach(_.foreach(_.foreach(_.foreach(_())))))
+          _ <- Task.eval(parsed.foreach(_.foreach(_.foreach(_.foreach(print)))))
           _ <- Task.eval {
             val (successes, failures) = parsed.partition(_.isDefined)
             val successCount = successes.length
@@ -124,7 +127,7 @@ object Main {
       } else Task.eval {
         val xml = scala.xml.XML.loadFile(filePath)
         val parsed = parseAndRenderOutput(renderer, xml)
-        parsed.map(_.getOrElse(Vector.empty).foreach(_.apply())).getOrElse {
+        parsed.map(_.getOrElse(Vector.empty).foreach(print)).getOrElse {
           println("Parsing failed!")
         }
       }
