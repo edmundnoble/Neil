@@ -63,7 +63,7 @@ trait FinalPath[A] {
         case HorizLineToRel(dx) => horizLineToRel(dx)
         case Cubic(x1, y1, x2, y2, x, y) => cubic(x1, y1, x2, y2, x, y)
         case CubicRel(x1, y1, x2, y2, dx, dy) => cubicRel(x1, y1, x2, y2, dx, dy)
-        case SmoothCubic(x2, y2, x, y) => smoothCubicRel(x2, y2, x, y)
+        case SmoothCubic(x2, y2, x, y) => smoothCubic(x2, y2, x, y)
         case SmoothCubicRel(x2, y2, dx, dy) => smoothCubicRel(x2, y2, dx, dy)
         case Quad(x1, y1, x, y) => quad(x1, y1, x, y)
         case QuadRel(x1, y1, dx, dy) => quadRel(x1, y1, dx, dy)

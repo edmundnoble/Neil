@@ -165,7 +165,7 @@ final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extend
           )
         (newState,
           outputLine(
-            fm"path.cubicTo(${state.lastSecondCubicControlX - state.hereX}, ${state.lastSecondCubicControlY - state.hereY}, $x2, $y2, $x, $y);",
+            fm"path.cubicTo(${state.hereX * 2 - state.lastSecondCubicControlX}, ${state.hereY * 2 - state.lastSecondCubicControlY}, $x2, $y2, $x, $y);",
             indentation = state.indentation
           )
         )
@@ -189,14 +189,20 @@ final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extend
       }
 
       override def quad(x1: Double, y1: Double, x: Double, y: Double): Paths =
-        outputLineS(_ => fm"path.quadTo($x1, $y1, $x, $y);", _.setHere(x, y))
+        outputLineS(
+          _ => fm"path.quadTo($x1, $y1, $x, $y);",
+          _.copy(
+            hereX = x, hereY = y,
+            lastQuadraticControlX = x1, lastQuadraticControlY = y1
+          )
+        )
 
       override def quadRel(x1: Double, y1: Double, dx: Double, dy: Double): Paths =
         outputLineS(_ => fm"path.rQuadTo($x1, $y1, $dx, $dy);", _.addToHere(dx, dy))
 
       override def smoothQuad(x: Double, y: Double): Paths = State { state =>
-        val newControlX = x * 2 - state.lastQuadraticControlX
-        val newControlY = y * 2 - state.lastQuadraticControlY
+        val newControlX = state.hereX * 2 - state.lastQuadraticControlX
+        val newControlY = state.hereY * 2 - state.lastQuadraticControlY
         (state.copy(
           hereX = x, hereY = y,
           lastQuadraticControlX = newControlX, lastQuadraticControlY = newControlY,
