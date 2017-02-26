@@ -54,6 +54,12 @@ object InitialPathRenderer extends FinalPath[Vector[InitialPath]] {
   override def quadRel(x1: Double, y1: Double, dx: Double, dy: Double): Vector[InitialPath] =
     Vector(QuadRel(x1, y1, dx, dy))
 
+  override def smoothQuad(x: Double, y: Double): Vector[InitialPath] =
+    Vector(SmoothQuad(x, y))
+
+  override def smoothQuadRel(dx: Double, dy: Double): Vector[InitialPath] =
+    Vector(SmoothQuadRel(dx, dy))
+
   override def elliptic(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, x: Double, y: Double): Vector[InitialPath] =
     Vector(Elliptic(rx, ry, rotX, largeArc, sweep, x, y))
 

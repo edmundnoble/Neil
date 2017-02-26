@@ -19,7 +19,7 @@ class AndroidRendererTests extends FreeSpec {
 
   "DrawEllipse" in rendererTest(
     Vector(DrawEllipse(1, 2, 3, 4)),
-    "{\n    RectF bounds = new RectF(-0.5, 4.0, 2.5, 0.0);\n    c.drawOval(bounds, p);\n}\n"
+    "c.drawOval(new RectF(-0.5, 4.0, 2.5, 0.0), p);\n"
   )
 
   "DrawCircle" in rendererTest(

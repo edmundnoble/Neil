@@ -41,6 +41,10 @@ trait FinalPath[A] {
 
   def quadRel(x1: Double, y1: Double, dx: Double, dy: Double): A
 
+  def smoothQuad(x: Double, y: Double): A
+
+  def smoothQuadRel(dx: Double, dy: Double): A
+
   def elliptic(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, x: Double, y: Double): A
 
   def ellipticRel(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, dx: Double, dy: Double): A
@@ -63,6 +67,8 @@ trait FinalPath[A] {
         case SmoothCubicRel(x2, y2, dx, dy) => smoothCubicRel(x2, y2, dx, dy)
         case Quad(x1, y1, x, y) => quad(x1, y1, x, y)
         case QuadRel(x1, y1, dx, dy) => quadRel(x1, y1, dx, dy)
+        case SmoothQuad(x, y) => smoothQuad(x, y)
+        case SmoothQuadRel(dx, dy) => smoothQuadRel(dx, dy)
         case Elliptic(rx, ry, rotX, largeArc, sweep, x, y) => elliptic(rx, ry, rotX, largeArc, sweep, x, y)
         case EllipticRel(rx, ry, rotX, largeArc, sweep, dx, dy) => ellipticRel(rx, ry, rotX, largeArc, sweep, dx, dy)
       })
@@ -125,6 +131,12 @@ object FinalPath {
           override def quadRel(x1: Double, y1: Double, dx: Double, dy: Double): B =
             f(fa.quadRel(x1, y1, dx, dy))
 
+          override def smoothQuad(x: Double, y: Double): B =
+            f(fa.smoothQuad(x, y))
+
+          override def smoothQuadRel(dx: Double, dy: Double): B =
+            f(fa.smoothQuadRel(dx, dy))
+
           override def elliptic(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, x: Double, y: Double): B =
             f(fa.elliptic(rx, ry, rotX, largeArc, sweep, x, y))
 
@@ -184,6 +196,12 @@ object FinalPath {
 
           override def quadRel(x1: Double, y1: Double, dx: Double, dy: Double): (A, B) =
             (fa.quadRel(x1, x1, dx, dy), fb.quadRel(x1, x1, dx, dy))
+
+          override def smoothQuad(x: Double, y: Double): (A, B) =
+            (fa.smoothQuad(x, y), fb.smoothQuad(x, y))
+
+          override def smoothQuadRel(dx: Double, dy: Double): (A, B) =
+            (fa.smoothQuadRel(dx, dy), fb.smoothQuadRel(dx, dy))
 
           override def elliptic(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, x: Double, y: Double): (A, B) =
             (fa.elliptic(rx, ry, rotX, largeArc, sweep, x, y), fb.elliptic(rx, ry, rotX, largeArc, sweep, x, y))

@@ -12,7 +12,23 @@ import scala.annotation.tailrec
 
 object AndroidRenderer {
 
-  final case class PathState(here: Coords, indentation: Int)
+  final case class PathState(hereX: Double, hereY: Double,
+                             lastSecondCubicControlX: Double, lastSecondCubicControlY: Double,
+                             lastQuadraticControlX: Double, lastQuadraticControlY: Double,
+                             indentation: Int) {
+    @inline def setHere(x: Double = hereX, y: Double = hereY) =
+      copy(
+        hereX = x, hereY = y,
+        lastSecondCubicControlX = Double.NaN, lastSecondCubicControlY = Double.NaN,
+        lastQuadraticControlX = Double.NaN, lastQuadraticControlY = Double.NaN
+      )
+
+    @inline def addToHere(dx: Double = 0, dy: Double = 0) = copy(
+      hereX = hereX + dx, hereY = hereY + dy,
+      lastSecondCubicControlX = Double.NaN, lastSecondCubicControlY = Double.NaN,
+      lastQuadraticControlX = Double.NaN, lastQuadraticControlY = Double.NaN
+    )
+  }
 
   implicit class fastMonoidInterpolation(val sc: StringContext) extends AnyVal {
     def fm[A](args: Any*)(implicit fastMonoid: FastMonoid[String, A]): A = {
@@ -44,24 +60,19 @@ final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extend
   }
 
   // TODO: WHY DO I HAVE TO DO THIS TO MY POOR NEWLINES
-  override def circle(x: Double, y: Double, r: Double): A = {
-    fm"c.drawCircle($x, $y, $r, p);${"\n"}"
-  }
+  override def circle(x: Double, y: Double, r: Double): A =
+    outputLine(fm"c.drawCircle($x, $y, $r, p);")
 
   override def ellipse(x: Double, y: Double, rx: Double, ry: Double): A = {
     val left = x - (rx / 2)
     val top = y + (ry / 2)
     val right = x + (rx / 2)
     val bottom = y - (ry / 2)
-    append(
-      fm"{${"\n"}    RectF bounds = new RectF($left, $top, $right, $bottom);${"\n"}",
-      in("    c.drawOval(bounds, p);\n}\n")
-    )
+    outputLine(fm"c.drawOval(new RectF($left, $top, $right, $bottom), p);")
   }
 
-  override def text(text: String, x: Double, y: Double): A = {
+  override def text(text: String, x: Double, y: Double): A =
     outputLine(fm"c.drawText(${"\""}$text${"\""}, $x, $y, p);")
-  }
 
   @tailrec
   private def indent(a: A, level: Int = 0): A =
@@ -84,41 +95,13 @@ final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extend
       override val empty: Paths = State.pure(self.empty)
 
       @inline
-      private def outputLineS(code: Coords => A, stateChange: Coords => Coords): Paths =
-        State[PathState, A] { state =>
-          val newHere = stateChange(state.here)
-          (state.copy(here = newHere),
-            self.append(indent(code(state.here), state.indentation), in("\n"))
+      private def outputLineS(code: PathState => A, stateChange: PathState => PathState): Paths =
+        State { state =>
+          val newState = stateChange(state)
+          (newState,
+            indent(code(newState), level = newState.indentation) |+| in("\n")
           )
         }
-
-      @inline
-      private def addCoords(p1: Coords, p2: Coords): Coords =
-        (p1._1 + p2._1, p1._2 + p2._2)
-
-      @inline
-      private def addThirdCoords(p1: (Coords, Coords, Coords), p2: (Coords, Coords, Coords)): (Coords, Coords, Coords) =
-        (p1._1, p1._2, (p1._3._1 + p2._3._1, p1._3._2 + p2._3._2))
-
-      @inline
-      private def addSecondCoords(p1: (Coords, Coords), p2: (Coords, Coords)): (Coords, Coords) =
-        (p1._1, (p1._2._1 + p2._2._1, p1._2._2 + p2._2._2))
-
-      @inline
-      private def addXCoords(dx: Double, coords: Coords): Coords =
-        (coords._1 + dx, coords._2)
-
-      @inline
-      private def addYCoords(dy: Double, coords: Coords): Coords =
-        (coords._1, coords._2 + dy)
-
-      @inline
-      private def setXCoords(x: Double, coords: Coords): Coords =
-        (x, coords._2)
-
-      @inline
-      private def setYCoords(y: Double, coords: Coords): Coords =
-        (coords._1, y)
 
       override def append(fst: Paths, snd: Paths): Paths =
         StateT.catsDataMonadForStateT[Eval, PathState].map2(fst, snd)(self.append)
@@ -127,46 +110,112 @@ final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extend
         State[PathState, A](state => (state, outputLine(in("path.close();"), state.indentation)))
 
       override def moveTo(x: Double, y: Double): Paths =
-        outputLineS(_ => fm"path.moveTo($x, $y);", _ => (x, y))
+        outputLineS(_ => fm"path.moveTo($x, $y);", _.setHere(x, y))
 
       override def moveToRel(dx: Double, dy: Double): Paths =
-        outputLineS(_ => fm"path.rMoveTo($dx, $dy);", addCoords(_, (dx, dy)))
+        outputLineS(_ => fm"path.rMoveTo($dx, $dy);", _.addToHere(dx, dy))
 
       override def lineTo(x: Double, y: Double): Paths =
-        outputLineS(_ => fm"path.lineTo($x, $y);", _ => (x, y))
+        outputLineS(_ => fm"path.lineTo($x, $y);", _.setHere(x, y))
 
       override def lineToRel(dx: Double, dy: Double): Paths =
-        outputLineS(_ => fm"path.rLineTo($dx, $dy);", addCoords(_, (dx, dy)))
+        outputLineS(_ => fm"path.rLineTo($dx, $dy);", _.addToHere(dx, dy))
 
       override def verticalLineTo(y: Double): Paths =
-        outputLineS({ case (x, _) => fm"path.lineTo($x, $y);" }, setYCoords(y, _))
+        outputLineS(s => fm"path.lineTo(${s.hereX}, ${s.hereY});", _.setHere(y = y))
 
       override def verticalLineToRel(dy: Double): Paths =
-        outputLineS(_ => fm"path.rLineTo(0.0, $dy);", addYCoords(dy, _))
+        outputLineS(_ => fm"path.rLineTo(0.0, $dy);", _.addToHere(dy = dy))
 
       override def horizLineTo(x: Double): Paths =
-        outputLineS({ case (_, y) => fm"path.lineTo($x, $y);" }, setXCoords(x, _))
+        outputLineS(s => fm"path.lineTo(${s.hereX}, ${s.hereY});", _.setHere(x = x))
 
       override def horizLineToRel(dx: Double): Paths =
-        outputLineS(_ => fm"path.rLineTo($dx, 0.0);", addXCoords(dx, _))
+        outputLineS(_ => fm"path.rLineTo($dx, 0.0);", _.addToHere(dx = dx))
 
       override def cubic(x1: Double, y1: Double, x2: Double, y2: Double, x: Double, y: Double): Paths =
-        outputLineS(_ => fm"path.cubicTo($x1, $y1, $x2, $y2, $x, $y);", _ => (x, y))
+        outputLineS(
+          _ => fm"path.cubicTo($x1, $y1, $x2, $y2, $x, $y);",
+          _.copy(
+            lastQuadraticControlX = Double.NaN, lastQuadraticControlY = Double.NaN,
+            lastSecondCubicControlX = x2, lastSecondCubicControlY = y2,
+            hereX = x, hereY = y
+          )
+        )
 
       override def cubicRel(x1: Double, y1: Double, x2: Double, y2: Double, dx: Double, dy: Double): Paths =
-        outputLineS(_ => fm"path.rCubicTo($x1, $y1, $x2, $y2, $dx, $dy);", addCoords(_, (dx, dy)))
+        outputLineS(_ => fm"path.rCubicTo($x1, $y1, $x2, $y2, $dx, $dy);", { state =>
+          val newX = state.hereX + dx
+          val newY = state.hereY + dy
+          val newState =
+            state.copy(
+              lastQuadraticControlX = Double.NaN, lastQuadraticControlY = Double.NaN,
+              lastSecondCubicControlX = x2 + newX, lastSecondCubicControlY = y2 + newY,
+              hereX = newX, hereY = newY
+            )
+          newState
+        })
 
-      override def smoothCubic(x2: Double, y2: Double, x: Double, y: Double): Paths =
-        State.pure(in(s"???"))
+      override def smoothCubic(x2: Double, y2: Double, x: Double, y: Double): Paths = State { state =>
+        val newState =
+          state.copy(
+            lastQuadraticControlX = Double.NaN, lastQuadraticControlY = Double.NaN,
+            lastSecondCubicControlX = x2, lastSecondCubicControlY = y2,
+            hereX = x, hereY = y
+          )
+        (newState,
+          outputLine(
+            fm"path.cubicTo(${state.lastSecondCubicControlX - state.hereX}, ${state.lastSecondCubicControlY - state.hereY}, $x2, $y2, $x, $y);",
+            indentation = state.indentation
+          )
+        )
+      }
 
-      override def smoothCubicRel(x2: Double, y2: Double, dx: Double, dy: Double): Paths =
-        State.pure(in(s"???"))
+      override def smoothCubicRel(x2: Double, y2: Double, dx: Double, dy: Double): Paths = State { state =>
+        val newX = state.hereX + dx
+        val newY = state.hereY + dy
+        val newState =
+          state.copy(
+            lastQuadraticControlX = Double.NaN, lastQuadraticControlY = Double.NaN,
+            lastSecondCubicControlX = x2 + newX, lastSecondCubicControlY = y2 + newY,
+            hereX = newX, hereY = newY
+          )
+        (newState,
+          outputLine(
+            fm"path.rCubicTo(${state.lastSecondCubicControlX - state.hereX}, ${state.lastSecondCubicControlY - state.hereY}, $x2, $y2, $dx, $dy);",
+            indentation = state.indentation
+          )
+        )
+      }
 
       override def quad(x1: Double, y1: Double, x: Double, y: Double): Paths =
-        outputLineS(_ => fm"path.quadTo($x1, $y1, $x, $y);", _ => (x, y))
+        outputLineS(_ => fm"path.quadTo($x1, $y1, $x, $y);", _.setHere(x, y))
 
       override def quadRel(x1: Double, y1: Double, dx: Double, dy: Double): Paths =
-        outputLineS(_ => fm"path.rQuadTo($x1, $y1, $dx, $dy);", addCoords((dx, dy), _))
+        outputLineS(_ => fm"path.rQuadTo($x1, $y1, $dx, $dy);", _.addToHere(dx, dy))
+
+      override def smoothQuad(x: Double, y: Double): Paths = State { state =>
+        val newControlX = x * 2 - state.lastQuadraticControlX
+        val newControlY = y * 2 - state.lastQuadraticControlY
+        (state.copy(
+          hereX = x, hereY = y,
+          lastQuadraticControlX = newControlX, lastQuadraticControlY = newControlY,
+          lastSecondCubicControlX = Double.NaN, lastSecondCubicControlY = Double.NaN
+        ), outputLine(
+          fm"path.quadTo($newControlX, $newControlY, $x, $y);",
+          indentation = state.indentation
+        ))
+      }
+
+      override def smoothQuadRel(dx: Double, dy: Double): Paths = State { state =>
+        val newControlX = dx * 2 - state.lastQuadraticControlX
+        val newControlY = dy * 2 - state.lastQuadraticControlY
+        (state.copy(
+          hereX = state.hereX + dx, hereY = state.hereY + dy,
+          lastQuadraticControlX = newControlX, lastQuadraticControlY = newControlY,
+          lastSecondCubicControlX = Double.NaN, lastSecondCubicControlY = Double.NaN
+        ), outputLine(fm"path.rQuadTo($newControlX, $newControlY, $dx, $dy);", indentation = state.indentation))
+      }
 
       override def elliptic(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, x: Double, y: Double): State[PathState, A] =
         State.pure(in(s"???"))
@@ -177,7 +226,14 @@ final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extend
     }
 
   override def includePath(paths: Paths): A = {
-    val result = paths.runA(PathState(here = (0, 0), indentation = 1)).value
+    val result = paths.runA(
+      PathState(
+        hereX = 0, hereY = 0,
+        lastSecondCubicControlX = Double.NaN, lastSecondCubicControlY = Double.NaN,
+        lastQuadraticControlX = Double.NaN, lastQuadraticControlY = Double.NaN,
+        indentation = 1
+      )
+    ).value
     val intro: A =
       append(
         outputLine(in("{")),

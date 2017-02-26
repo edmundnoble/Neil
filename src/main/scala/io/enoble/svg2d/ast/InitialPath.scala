@@ -20,5 +20,7 @@ final case class SmoothCubic(x2: Double, y2: Double, x: Double, y: Double) exten
 final case class SmoothCubicRel(x2: Double, y2: Double, dx: Double, dy: Double) extends InitialPath
 final case class Quad(x1: Double, y1: Double, x: Double, y: Double) extends InitialPath
 final case class QuadRel(x1: Double, y1: Double, dx: Double, dy: Double) extends InitialPath
+final case class SmoothQuad(x: Double, y: Double) extends InitialPath
+final case class SmoothQuadRel(dx: Double, dy: Double) extends InitialPath
 final case class Elliptic(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, x: Double, y: Double) extends InitialPath
 final case class EllipticRel(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, dx: Double, dy: Double) extends InitialPath

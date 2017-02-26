@@ -9,7 +9,14 @@ import org.scalatest.FreeSpec
 
 class AndroidPathRendererTests extends FreeSpec {
 
-  final def rendererTest[A](input: Vector[InitialPath], initialState: PathState = PathState(here = (0, 0), indentation = 0),
+  val initialState = PathState(
+    hereX = 0, hereY = 0,
+    indentation = 0,
+    lastQuadraticControlX = Double.NaN, lastQuadraticControlY = Double.NaN,
+    lastSecondCubicControlX = Double.NaN, lastSecondCubicControlY = Double.NaN
+  )
+
+  final def rendererTest[A](input: Vector[InitialPath], initialState: PathState = initialState,
                             expectedOutput: String, expectedState: Option[PathState] = None): Unit = {
     val out = AndroidRenderer(rwrsbActionMonoid).path.renderInitial(input).run(initialState).value
     assert(out._2.asString == expectedOutput)
@@ -23,7 +30,7 @@ class AndroidPathRendererTests extends FreeSpec {
 
   "MoveTo with indentation" in rendererTest(
     input = Vector(MoveTo(0.0, 0.0)),
-    initialState = PathState(here = (0, 0), indentation = 1),
+    initialState = initialState.copy(indentation = 1),
     expectedOutput = "    path.moveTo(0.0, 0.0);\n"
   )
 
