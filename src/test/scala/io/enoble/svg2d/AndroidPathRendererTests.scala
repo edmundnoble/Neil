@@ -115,7 +115,7 @@ class AndroidPathRendererTests extends FreeSpec {
 
 //  "SmoothQuadRel" in rendererTest(
 //    input = Vector(MoveTo(1.0, 2.0), QuadRel(1, 2, 3, 4), SmoothQuadRel(5, 6)),
-//    expectedOutput = "path.moveTo(1.0, 2.0);\npath.rQuadTo(1.0, 2.0, 3.0, 4.0);\n"
+//    expectedOutput = "path.moveTo(1.0, 2.0);\npath.rQuadTo(1.0, 2.0, 3.0, 4.0);\npath.rQuadTo(0.0, 2.0, 5.0, 6.0);\n"
 //  )
 
 
