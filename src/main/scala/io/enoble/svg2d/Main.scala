@@ -2,138 +2,346 @@ package io
 package enoble
 package svg2d
 
-import java.io.File
+import java.io.{File, FilenameFilter, PrintStream}
 import java.util.concurrent.Executors
 
 import cats.Monoid
 import cats.implicits._
-import io.enoble.svg2d.ast.{FastMonoid, FinalSVG, InitialSVG}
+import io.enoble.svg2d.ast._
 import io.enoble.svg2d.render._
 import io.enoble.svg2d.utils.TCPairC
-import io.enoble.svg2d.xmlparse.Parse
+import io.enoble.svg2d.xmlparse.{Parse, XMLConsumer}
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.cats._
-import scopt.Read
+import caseapp._
+import caseapp.core.{ArgParser, Messages, WithHelp}
+import monix.reactive.Observable
+import shapeless._
 
+import scala.xml.pull._
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
+import scala.io.Source
+import scala.xml.{MetaData, NamespaceBinding, NodeSeq}
+import scala.xml.parsing.{ExternalSources, MarkupHandler, MarkupParser}
+import Main._
 
-object Main {
+@AppName("Neil")
+@AppVersion("0.1.0")
+@ProgName("neil")
+final case class MainConfig(debug: Boolean = false,
+                            timed: Boolean = false,
+                            @ExtraName("i")
+                            input: ExistingFile,
+                            @ExtraName("a")
+                            android: Option[File],
+                            @ExtraName("s")
+                            swift: Option[File],
+                            @ExtraName("o")
+                            objc: Option[File]
+                           ) {
 
-  sealed trait OutputType
-
-  case object Swift extends OutputType
-
-  case object ObjectiveC extends OutputType
-
-  case object Android extends OutputType
-
-  val outputTypeMapping: Map[String, Main.OutputType] = List(
-    List("s", "swift") -> Swift,
-    List("c", "objc", "objectivec") -> ObjectiveC,
-    List("a", "android", "j", "java") -> Android
-  ).flatMap(p => p._1.map(_ -> p._2))(collection.breakOut)
-
-  def parseOutputType(str: String): OutputType =
-    outputTypeMapping.getOrElse(str.toLowerCase(), throw new IllegalArgumentException(s"$str is not a valid output type: try 's', 'c', 'a', or 'r'"))
-
-
-  case class MainConfig(debug: Boolean = false,
-                        inputFolder: File = null,
-                        androidEnabled: Boolean, androidOutputFile: Option[File],
-                        iosEnabled: Boolean, iOSOutputFile: Option[File],
-                        objectiveCEnabled: Boolean, objectiveCOutputFile: Option[File])
-
-  implicit val outputTypeInstances: Read[Seq[OutputType]] = Read.seqRead(Read.reads(parseOutputType))
-
-  val parser = new scopt.OptionParser[MainConfig]("neil") {
-    head("neil", "0.0.2")
-    opt[OutputType]('t', "otype") required() valueName "<outputType>" action { (x, c) =>
-      c.copy(outputType = x)
-    } text "output type; valid output types are any combination of 's' (Swift), 'c' (Objective C), 'a' (Android)"
-    opt[Unit]("debug") optional() valueName "<debug>" action { (_, c) => c.copy(debug = true) }
-    opt[File]('i', "input") required() valueName "<file>" action { (x, c) =>
-      c.copy(inputFolder = x)
-    } text "input svg file/folder of svg's"
-    opt[File]('a', "android-out") optional() valueName "<androidOut>" action { (x, c) =>
-      c.copy(outputFolder = Some(x))
-    } text "output code generation folder/file (or none, for stdout)"
-    help("help") text "prints this usage text"
-  }
-
-  // a) separate outputs for each output type
-
-  def parseAndRenderOutput[A](renderer: FinalSVG[A], svgContent: xml.Elem): Option[Option[A]] = {
-    Parse.parseAll(renderer)(svgContent)
-  }
-
-  def main(args: Array[String]): Unit = {
-    main(args, identity)
-  }
-
-  def main(args: Array[String], transformer: FastMonoid[String, Vector[String]] => FastMonoid[String, Vector[String]]): Unit = {
-    val configParsed: Option[MainConfig] =
-      parser.parse(args, MainConfig())
-    if (configParsed.isEmpty) sys.exit(1)
+  def main(transformer: FastMonoid[String, Vector[String]] => FastMonoid[String, Vector[String]]): Unit = {
     implicit val workThreadPoolScheduler =
       Scheduler(Executors.newFixedThreadPool(2))
     val future =
-        runApp(configParsed.get, transformer).runAsync(Scheduler.global)
+      runApp(transformer)(workThreadPoolScheduler).runAsync(Scheduler.global).map(_ => workThreadPoolScheduler.shutdown())
     Await.result(future, Duration.Inf)
-    workThreadPoolScheduler.shutdown()
   }
 
-  def runApp(config: MainConfig,
-             transformer: FastMonoid[String, Vector[String]] => FastMonoid[String, Vector[String]])(implicit workThreadPoolScheduler: Scheduler): Task[Unit] = {
-    val filePath = config.inputFolder
+
+  def runApp(transformer: FastMonoid[String, Vector[String]] => FastMonoid[String, Vector[String]])(implicit workThreadPoolScheduler: Scheduler): Task[Unit] = Task.defer {
     val stringyOutputMonoid: FastMonoid[String, Vector[String]] =
-      transformer(FastMonoid.Vec[String])
-    val renderer: FinalSVG[Vector[String]] = config.outputType match {
-      case Swift => SwiftRenderer(stringyOutputMonoid)
-      case ObjectiveC => ObjectiveCRenderer(stringyOutputMonoid)
-      case Android => AndroidRenderer(stringyOutputMonoid)
-      case Raw => InitialRenderer(FastMonoid.ToString[InitialSVG]())
+      transformer(FastMonoid.Vec[String]())
+
+    val swiftRenderer = SwiftRenderer(stringyOutputMonoid)
+    val objcRenderer = ObjectiveCRenderer(stringyOutputMonoid)
+    val androidRenderer = AndroidRenderer(stringyOutputMonoid)
+    val initialRenderer = InitialRenderer(FastMonoid.ToString[InitialSVG]())
+
+    if (input.file.isDirectory) {
+      android.foreach(_.mkdirs())
+      swift.foreach(_.mkdirs())
+      objc.foreach(_.mkdirs())
+    } else {
+      android.foreach(_.createNewFile())
+      swift.foreach(_.createNewFile())
+      objc.foreach(_.createNewFile())
     }
-    runWithRenderer(filePath, renderer)
+    assert(android.forall(_.isDirectory == input.file.isDirectory) &&
+      swift.forall(_.isDirectory == input.file.isDirectory) &&
+      objc.forall(_.isDirectory == input.file.isDirectory))
+    if (input.file.isDirectory) {
+      val svgInputFiles = input.file.listFiles(new FilenameFilter {
+        override def accept(dir: File, name: String): Boolean = name.endsWith(".svg")
+      })
+      val androidOutputFiles = svgInputFiles.map(n => android.map(f => new File(f, n.getName)))
+      val swiftOutputFiles = svgInputFiles.map(n => swift.map(f => new File(f, n.getName)))
+      val objcOutputFiles = svgInputFiles.map(n => objc.map(f => new File(f, n.getName)))
+      Task.gatherUnordered(
+        svgInputFiles.zipWithIndex.map {
+          case (i, idx) =>
+            runWithRenderer(i, androidRenderer, androidOutputFiles(idx), swiftRenderer, swiftOutputFiles(idx), objcRenderer, objcOutputFiles(idx), initialRenderer)
+        }
+      ).map(_ => ())
+    } else {
+      runWithRenderer(input.file, androidRenderer, android, swiftRenderer, swift, objcRenderer, objc, initialRenderer)
+    }
   }
 
-  def runWithRenderer(filePath: File, renderer: FinalSVG[Vector[String]])(implicit sch: Scheduler): Task[Unit] =
-    Task.defer {
-      val isDir = filePath.isDirectory
-      if (isDir) {
-        val svgFiles = filePath.listFiles().toVector
-        for {
-          parsed <-
-          Task.wander(svgFiles)(f => Task.fork(Task.eval(Parse.parseAll(renderer)(xml.XML.loadFile(f))), sch))
-          // ultimate effect terminator
-          _ <- Task.eval(parsed.foreach(_.foreach(_.foreach(_.foreach(print)))))
-          _ <- Task.eval {
-            val (successes, failures) = parsed.partition(_.isDefined)
-            val successCount = successes.length
-            val failureCount = failures.length
-            val successRate = (successCount * 100) / (successCount + failureCount).toDouble
-            if (failureCount > 0) {
-              System.err.println(s"Successes: $successCount")
-              System.err.println(s"Failures: $failureCount")
-              System.err.println(f"Success rate: $successRate%2.2f%%")
-            }
-            val failedFiles = parsed.zipWithIndex.collect { case (Some(_), d) => svgFiles(d).getName }
+  def run[A](file: File, renderer: FinalSVG[A])(implicit sch: Scheduler): Task[A] =
+    Task.fork(Task.eval {
+      val time = System.nanoTime
+      val parser = new xmlparse.XmlParser[A](Source.fromFile(file), XMLConsumerForRenderers(renderer))
+      parser.run()
+      val timeAfter = System.nanoTime
+      if (timed) {
+        println(s"accumulating input from file ${file.getName} took ${(timeAfter - time) / 1000000.0} milliseconds")
+      }
+      parser.getState
+    }, sch)
 
-            if (failureCount > 0) {
-              def truncate(l: Int)(s: String) = if (s.length < l) s else s.substring(0, l) + "..."
+  def runWithRenderer[AP, SP, OP](inputFile: File,
+                                  andy: FinalSVG[Vector[String]] {type Paths = AP}, androidOutput: Option[File],
+                                  swifty: FinalSVG[Vector[String]] {type Paths = SP}, swiftOutput: Option[File],
+                                  objcy: FinalSVG[Vector[String]] {type Paths = OP}, objcOutput: Option[File],
+                                  initial: FinalSVG[Vector[String]] {type Paths = Vector[InitialPath]})(implicit sch: Scheduler): Task[Unit] = {
+    val androidWriter: Option[PrintStream] = androidOutput.map(new PrintStream(_))
+    val swiftWriter: Option[PrintStream] = swiftOutput.map(new PrintStream(_))
+    val objcWriter: Option[PrintStream] = objcOutput.map(new PrintStream(_))
 
-              System.err.println(s"Failed files: \n${truncate(100)(failedFiles.mkString("\n"))}")
-            }
-          }
-        } yield ()
-      } else Task.eval {
-        val xml = scala.xml.XML.loadFile(filePath)
-        val parsed = parseAndRenderOutput(renderer, xml)
-        parsed.map(_.getOrElse(Vector.empty).foreach(print)).getOrElse {
-          println("Parsing failed!")
-        }
+    val renderer = new FinalSVG[Vector[() => Unit]] {
+      override type Paths = (Option[AP], Option[SP], Option[OP], Option[Vector[InitialPath]])
+      override val path: FinalPath[Paths] = new FinalPath[Paths] {
+        override val empty: Paths =
+          (androidWriter.as(andy.path.empty),
+            swiftWriter.as(swifty.path.empty),
+            objcWriter.as(objcy.path.empty),
+            if (debug) Some(initial.path.empty) else None)
+
+        override def append(fst: Paths, snd: Paths): Paths =
+          ((fst._1 |@| snd._1).map(andy.path.append),
+            (fst._2 |@| snd._2).map(swifty.path.append),
+            (fst._3 |@| snd._3).map(objcy.path.append),
+            (fst._4 |@| snd._4).map(_ ++ _))
+
+        override def closePath(): Paths =
+          (Some(andy.path.closePath()),
+            Some(swifty.path.closePath()),
+            Some(objcy.path.closePath()),
+            if (debug) Some(initial.path.closePath()) else None)
+
+        override def moveTo(x: Double, y: Double): Paths =
+          (androidWriter.as(andy.path.moveTo(x, y)),
+            swiftWriter.as(swifty.path.moveTo(x, y)),
+            objcWriter.as(objcy.path.moveTo(x, y)),
+            if (debug) Some(initial.path.moveTo(x, y)) else None)
+
+        override def moveToRel(dx: Double, dy: Double): Paths =
+          (androidWriter.as(andy.path.moveToRel(dx, dy)),
+            swiftWriter.as(swifty.path.moveToRel(dx, dy)),
+            objcWriter.as(objcy.path.moveToRel(dx, dy)),
+            if (debug) Some(initial.path.moveToRel(dx, dy)) else None)
+
+        override def lineTo(x: Double, y: Double): Paths =
+          (androidWriter.as(andy.path.lineTo(x, y)),
+            swiftWriter.as(swifty.path.lineTo(x, y)),
+            objcWriter.as(objcy.path.lineTo(x, y)),
+          if (debug) Some(initial.path.lineTo(x, y)) else None)
+
+        override def lineToRel(dx: Double, dy: Double): Paths =
+          (androidWriter.as(andy.path.lineToRel(dx, dy)),
+            swiftWriter.as(swifty.path.lineToRel(dx, dy)),
+            objcWriter.as(objcy.path.lineToRel(dx, dy)),
+          if (debug) Some(initial.path.lineToRel(dx, dy)) else None)
+
+        override def verticalLineTo(y: Double): Paths =
+          (androidWriter.as(andy.path.verticalLineTo(y)),
+            swiftWriter.as(swifty.path.verticalLineTo(y)),
+            objcWriter.as(objcy.path.verticalLineTo(y)),
+          if (debug) Some(initial.path.verticalLineTo(y)) else None)
+
+        override def verticalLineToRel(dy: Double): Paths =
+          (androidWriter.as(andy.path.verticalLineToRel(dy)),
+            swiftWriter.as(swifty.path.verticalLineToRel(dy)),
+            objcWriter.as(objcy.path.verticalLineToRel(dy)),
+          if (debug) Some(initial.path.verticalLineToRel(dy)) else None)
+
+        override def horizLineTo(x: Double): Paths =
+          (androidWriter.as(andy.path.horizLineTo(x)),
+            swiftWriter.as(swifty.path.horizLineTo(x)),
+            objcWriter.as(objcy.path.horizLineTo(x)),
+          if (debug) Some(initial.path.horizLineTo(x)) else None)
+
+        override def horizLineToRel(dx: Double): Paths =
+          (androidWriter.as(andy.path.horizLineToRel(dx)),
+            swiftWriter.as(swifty.path.horizLineToRel(dx)),
+            objcWriter.as(objcy.path.horizLineToRel(dx)),
+          if (debug) Some(initial.path.horizLineToRel(dx)) else None)
+
+        override def cubic(x1: Double, y1: Double, x2: Double, y2: Double, x: Double, y: Double): Paths =
+          (androidWriter.as(andy.path.cubic(x1, y1, x2, y2, x, y)),
+            swiftWriter.as(swifty.path.cubic(x1, y1, x2, y2, x, y)),
+            objcWriter.as(objcy.path.cubic(x1, y1, x2, y2, x, y)),
+          if (debug) Some(initial.path.cubic(x1, y1, x2, y2, x, y)) else None)
+
+        override def cubicRel(x1: Double, y1: Double, x2: Double, y2: Double, dx: Double, dy: Double): Paths =
+          (androidWriter.as(andy.path.cubicRel(x1, y1, x2, y2, dx, dy)),
+            swiftWriter.as(swifty.path.cubicRel(x1, y1, x2, y2, dx, dy)),
+            objcWriter.as(objcy.path.cubicRel(x1, y1, x2, y2, dx, dy)),
+          if (debug) Some(initial.path.cubicRel(x1, y1, x2, y2, dx, dy)) else None)
+
+        override def smoothCubic(x2: Double, y2: Double, x: Double, y: Double): Paths =
+          (androidWriter.as(andy.path.smoothCubic(x2, y2, x, y)),
+            swiftWriter.as(swifty.path.smoothCubic(x2, y2, x, y)),
+            objcWriter.as(objcy.path.smoothCubic(x2, y2, x, y)),
+          if (debug) Some(initial.path.smoothCubic(x2, y2, x, y)) else None)
+
+        override def smoothQuad(x: Double, y: Double): Paths =
+          (androidWriter.as(andy.path.smoothQuad(x, y)),
+            swiftWriter.as(swifty.path.smoothQuad(x, y)),
+            objcWriter.as(objcy.path.smoothQuad(x, y)),
+          if (debug) Some(initial.path.smoothQuad(x, y)) else None)
+
+        override def smoothQuadRel(dx: Double, dy: Double): Paths =
+          (androidWriter.as(andy.path.smoothQuadRel(dx, dy)),
+            swiftWriter.as(swifty.path.smoothQuadRel(dx, dy)),
+            objcWriter.as(objcy.path.smoothQuadRel(dx, dy)),
+          if (debug) Some(initial.path.smoothQuadRel(dx, dy)) else None)
+
+        override def elliptic(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, x: Double, y: Double): Paths =
+          (androidWriter.as(andy.path.elliptic(rx, ry, rotX, largeArc, sweep, x, y)),
+            swiftWriter.as(swifty.path.elliptic(rx, ry, rotX, largeArc, sweep, x, y)),
+            objcWriter.as(objcy.path.elliptic(rx, ry, rotX, largeArc, sweep, x, y)),
+          if (debug) Some(initial.path.elliptic(rx, ry, rotX, largeArc, sweep, x, y)) else None)
+
+        override def smoothCubicRel(x2: Double, y2: Double, dx: Double, dy: Double): Paths =
+          (androidWriter.as(andy.path.smoothCubicRel(x2, y2, dx, dy)),
+            swiftWriter.as(swifty.path.smoothCubicRel(x2, y2, dx, dy)),
+            objcWriter.as(objcy.path.smoothCubicRel(x2, y2, dx, dy)),
+          if (debug) Some(initial.path.smoothCubicRel(x2, y2, dx, dy)) else None)
+
+        override def quad(x1: Double, y1: Double, x: Double, y: Double): Paths =
+          (androidWriter.as(andy.path.quad(x1, y1, x, y)),
+            swiftWriter.as(swifty.path.quad(x1, y1, x, y)),
+            objcWriter.as(objcy.path.quad(x1, y1, x, y)),
+          if (debug) Some(initial.path.quad(x1, y1, x, y)) else None)
+
+        override def quadRel(x1: Double, y1: Double, dx: Double, dy: Double): Paths =
+          (androidWriter.as(andy.path.quadRel(x1, y1, dx, dy)),
+            swiftWriter.as(swifty.path.quadRel(x1, y1, dx, dy)),
+            objcWriter.as(objcy.path.quadRel(x1, y1, dx, dy)),
+          if (debug) Some(initial.path.quadRel(x1, y1, dx, dy)) else None)
+
+        override def ellipticRel(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, dx: Double, dy: Double): Paths =
+          (androidWriter.as(andy.path.ellipticRel(rx, ry, rotX, largeArc, sweep, dx, dy)),
+            swiftWriter.as(swifty.path.ellipticRel(rx, ry, rotX, largeArc, sweep, dx, dy)),
+            objcWriter.as(objcy.path.ellipticRel(rx, ry, rotX, largeArc, sweep, dx, dy)),
+          if (debug) Some(initial.path.ellipticRel(rx, ry, rotX, largeArc, sweep, dx, dy)) else None)
+      }
+
+      override val empty: scala.Vector[() => Unit] = Vector.empty
+
+      override def append(fst: scala.Vector[() => Unit], snd: scala.Vector[() => Unit]): scala.Vector[() => Unit] =
+        fst ++ snd
+
+      override def circle(x: Double, y: Double, r: Double): scala.Vector[() => Unit] = Vector({ () =>
+        androidWriter.foreach(writer => andy.circle(x, y, r).foreach(writer.append(_)))
+        objcWriter.foreach(writer => objcy.circle(x, y, r).foreach(writer.append(_)))
+        swiftWriter.foreach(writer => swifty.circle(x, y, r).foreach(writer.append(_)))
+        if (debug) initial.circle(x, y, r).foreach(System.out.println)
+      })
+
+      override def ellipse(x: Double, y: Double, rx: Double, ry: Double): scala.Vector[() => Unit] = Vector({ () =>
+        androidWriter.foreach(writer => andy.ellipse(x, y, rx, ry).foreach(writer.append(_)))
+        objcWriter.foreach(writer => objcy.ellipse(x, y, rx, ry).foreach(writer.append(_)))
+        swiftWriter.foreach(writer => swifty.ellipse(x, y, rx, ry).foreach(writer.append(_)))
+        if (debug) initial.ellipse(x, y, rx, ry).foreach(System.out.println)
+      })
+
+      override def text(text: String, x: Double, y: Double): scala.Vector[() => Unit] = Vector({ () =>
+        androidWriter.foreach(writer => andy.text(text, x, y).foreach(writer.append(_)))
+        swiftWriter.foreach(writer => andy.text(text, x, y).foreach(writer.append(_)))
+        objcWriter.foreach(writer => andy.text(text, x, y).foreach(writer.append(_)))
+        if (debug) initial.text(text, x, y).foreach(System.out.println)
+      })
+
+      override def includePath(paths: Paths): scala.Vector[() => Unit] = Vector({ () =>
+        (androidWriter |@| paths._1).map((writer, p) => andy.includePath(p).foreach(writer.append(_)))
+        (swiftWriter |@| paths._2).map((writer, p) => swifty.includePath(p).foreach(writer.append(_)))
+        (objcWriter |@| paths._3).map((writer, p) => objcy.includePath(p).foreach(writer.append(_)))
+        if (debug) paths._4.foreach(_.foreach(System.out.println))
+      })
+    }
+
+    run(inputFile, renderer).map(_.foreach(_ ())).map { _ =>
+      androidWriter.foreach(_.close())
+      swiftWriter.foreach(_.close())
+      objcWriter.foreach(_.close())
+    }
+
+  }
+
+}
+
+object Main {
+
+  final case class XMLConsumerForRenderers[A](finalSVG: FinalSVG[A]) extends XMLConsumer[A] {
+    // here add styles
+    override def elemStart(label: String, attrs: MetaData): A =
+      Parse.parsers.get(label).flatMap(_.apply(attrs, finalSVG)).getOrElse(finalSVG.empty)
+
+    // here remove styles
+    override def elemEnd(label: String): A = finalSVG.empty
+
+    // TODO: handle <tspan>
+    override def text(label: String, attrs: MetaData, text: String): A =
+      Parse.terminalParsers.get(label).flatMap(_.apply(attrs, text, finalSVG)).getOrElse(finalSVG.empty)
+
+    override def entityRef(entity: String): A = finalSVG.empty
+
+    override val start: A = finalSVG.empty
+
+    override def progress(fst: A, snd: A): A = finalSVG.append(fst, snd)
+  }
+
+  implicit val fileArgParser: ArgParser[File] =
+    ArgParser.instance[File] { s =>
+      Right(new File(s))
+    }
+
+  implicit val existingFileArgParser: ArgParser[ExistingFile] =
+    ArgParser.instance[ExistingFile] { s =>
+      val file = new File(s)
+      if (file.exists()) {
+        Right(ExistingFile(file))
+      } else {
+        Left(s"file $s does not appear to exist")
       }
     }
+
+  final case class ExistingFile(file: File) extends AnyVal
+
+  def main(args: Array[String]): Unit = {
+    Parser[MainConfig].withHelp.detailedParse(args) match {
+      case Left(err) =>
+        Console.err.println(err)
+        sys.exit(1)
+
+      case Right((WithHelp(usage, help, t), remainingArgs, extraArgs)) =>
+        if (help) {
+          println(Messages[MainConfig].withHelp.helpMessage)
+          sys.exit(0)
+        }
+
+        if (usage) {
+          println(Messages[MainConfig].withHelp.usageMessage)
+          sys.exit(0)
+        }
+        t.main(identity)
+    }
+  }
+
 }
 

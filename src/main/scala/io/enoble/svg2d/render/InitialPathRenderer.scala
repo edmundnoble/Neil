@@ -3,7 +3,8 @@ package enoble
 package svg2d
 package render
 
-import io.enoble.svg2d.ast._
+import io.enoble.svg2d.ast.{FinalPath, InitialPath}
+import io.enoble.svg2d.ast.InitialPath._
 
 object InitialPathRenderer extends FinalPath[Vector[InitialPath]] {
   override val empty = Vector.empty[InitialPath]

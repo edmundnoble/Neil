@@ -3,6 +3,7 @@ package enoble
 package svg2d
 
 import io.enoble.svg2d.ast._
+import io.enoble.svg2d.ast.InitialPath._
 import io.enoble.svg2d.render.AndroidRenderer
 import io.enoble.svg2d.render.AndroidRenderer.PathState
 import org.scalatest.FreeSpec
@@ -18,7 +19,7 @@ class AndroidPathRendererTests extends FreeSpec {
 
   final def rendererTest[A](input: Vector[InitialPath], initialState: PathState = initialState,
                             expectedOutput: String, expectedState: Option[PathState] = None): Unit = {
-    val out = AndroidRenderer(rwrsbActionMonoid).path.renderInitial(input).run(initialState).value
+    val out = FinalPath.renderInitial(AndroidRenderer(rwrsbActionMonoid).path)(input).run(initialState).value
     assert(out._2.asString == expectedOutput)
     expectedState.foreach(s => assert(out._1 == s))
   }

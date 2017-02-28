@@ -5,15 +5,16 @@ package svg2d
 import io.enoble.svg2d.ast.FinalSVG
 
 import scala.util.Try
+import scala.xml.MetaData
 
 package object xmlparse {
 
   type ParseError = Exception
 
-  implicit class HasAttributes(val x: xml.Elem) extends AnyVal {
-    def getOrDefault(n: String, default: String): String = x.attribute(n).map(_.head.text).getOrElse(default)
+  implicit class HasAttributes(val x: MetaData) extends AnyVal {
+    def getOrDefault(n: String, default: String): String = x.get(n).map(_.head.text).getOrElse(default)
 
-    def getOpt(n: String): Option[String] = x.attribute(n).map(_.head.text)
+    def getOpt(n: String): Option[String] = x.get(n).map(_.head.text)
   }
 
   implicit class CaseInsensitiveEquals(val s: String) extends AnyVal {

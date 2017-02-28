@@ -77,16 +77,9 @@ object Parse {
     attrs.elemCount
   }
 
-  def parseAll[A](svg: FinalSVG[A]): xml.Elem => Option[Option[A]] =
-    parseTree[A](svg, parseDrawable[A](svg))
-
-  def parseDrawable[A](svg: FinalSVG[A]): xml.Elem => Option[Option[A]] =
-    elem =>
-      parsers.get(elem.label).map(_.apply(elem, svg)).orElse {
-//        println(s"Unrecognized element: ${elem.label}")
-        None
-      }
+  val terminalParsers: Map[String, TerminalModel] =
+    List(Text).map(m => m.label -> m)(collection.breakOut)
 
   val parsers: Map[String, Model] =
-    List(Circle, Ellipse, Text, Path, Rect).map(m => m.label -> m)(collection.breakOut)
+    List[Model](Circle, Ellipse, Path, Rect).map(m => m.label -> m)(collection.breakOut)
 }

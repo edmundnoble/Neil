@@ -1,6 +1,6 @@
 name in ThisBuild := "neil"
 
-scalaVersion in ThisBuild := "2.11.8"
+scalaVersion in ThisBuild := "2.12.1"
 
 scalaOrganization in ThisBuild := "org.typelevel"
 
@@ -12,6 +12,7 @@ scalacOptions ++= Seq(
   "-Yliteral-types",
   "-feature",
   "-deprecation",
+  "-unchecked",
   "-language:higherKinds",
   "-Xfatal-warnings"
 )
@@ -24,13 +25,13 @@ libraryDependencies += "io.monix" %% "monix" % "2.2.2"
 
 libraryDependencies += "io.monix" %% "monix-cats" % "2.2.2"
 
-libraryDependencies += "org.scalatest" % "scalatest_2.11" % "3.0.1" % "test"
+libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.1" % "test"
 
 libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % "1.0.6"
 
-libraryDependencies += "com.lihaoyi" %% "fastparse" % "0.4.1"
+libraryDependencies += "com.lihaoyi" %% "fastparse" % "0.4.2"
 
-libraryDependencies += "com.github.scopt" %% "scopt" % "3.3.0"
+libraryDependencies += "com.github.alexarchambault" %% "case-app" % "1.1.3"
 
 resolvers += Resolver.sonatypeRepo("public")
 

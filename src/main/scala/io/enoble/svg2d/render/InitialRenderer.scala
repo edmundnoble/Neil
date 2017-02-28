@@ -5,6 +5,7 @@ package render
 
 import cats.Monoid
 import io.enoble.svg2d.ast._
+import io.enoble.svg2d.ast.InitialSVG._
 
 case class InitialCode(fragments: Vector[InitialSVG]) {
   def asString: String = fragments.mkString("\n")

@@ -1,5 +1,7 @@
 package io.enoble.svg2d
 
+import io.enoble.svg2d.ast.InitialPath.{MoveTo, VerticalLineTo}
+import io.enoble.svg2d.ast.InitialSVG._
 import io.enoble.svg2d.ast._
 import io.enoble.svg2d.render.AndroidRenderer
 import org.scalatest.FreeSpec
@@ -8,7 +10,7 @@ class AndroidRendererTests extends FreeSpec {
 
   final def rendererTest[A](input: Vector[InitialSVG],
                             expectedOutput: String): Unit = {
-    val out = AndroidRenderer(rwrsbActionMonoid).renderInitial(input)
+    val out = FinalSVG.renderInitial(AndroidRenderer(rwrsbActionMonoid))(input)
     assert(out.asString == expectedOutput)
   }
 

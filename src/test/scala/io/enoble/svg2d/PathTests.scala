@@ -2,6 +2,7 @@ package io
 package enoble
 package svg2d
 
+import io.enoble.svg2d.ast.InitialPath._
 import io.enoble.svg2d.ast._
 import io.enoble.svg2d.render.InitialPathRenderer
 import io.enoble.svg2d.xmlparse.Path
