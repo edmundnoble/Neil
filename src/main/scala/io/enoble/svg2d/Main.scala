@@ -5,26 +5,20 @@ package svg2d
 import java.io.{File, FilenameFilter, PrintStream}
 import java.util.concurrent.Executors
 
-import cats.Monoid
 import cats.implicits._
 import io.enoble.svg2d.ast._
 import io.enoble.svg2d.render._
-import io.enoble.svg2d.utils.TCPairC
 import io.enoble.svg2d.xmlparse.{Parse, XMLConsumer}
 import monix.eval.Task
 import monix.execution.Scheduler
 import monix.cats._
 import caseapp._
 import caseapp.core.{ArgParser, Messages, WithHelp}
-import monix.reactive.Observable
-import shapeless._
 
-import scala.xml.pull._
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 import scala.io.Source
 import scala.xml.{MetaData, NamespaceBinding, NodeSeq}
-import scala.xml.parsing.{ExternalSources, MarkupHandler, MarkupParser}
 import Main._
 
 @AppName("Neil")
@@ -39,15 +33,18 @@ final case class MainConfig(debug: Boolean = false,
                             @ExtraName("s")
                             swift: Option[File],
                             @ExtraName("o")
-                            objc: Option[File]
-                           ) {
+                            objc: Option[File]) {
 
   def main(transformer: FastMonoid[String, Vector[String]] => FastMonoid[String, Vector[String]]): Unit = {
     implicit val workThreadPoolScheduler =
       Scheduler(Executors.newFixedThreadPool(2))
+    val time = System.nanoTime
     val future =
       runApp(transformer)(workThreadPoolScheduler).runAsync(Scheduler.global).map(_ => workThreadPoolScheduler.shutdown())
     Await.result(future, Duration.Inf)
+    val timeAfter = System.nanoTime
+    if (timed)
+      println(s"Time taken to generate code: ${(timeAfter - time) / 1000000.0} milliseconds")
   }
 
 
@@ -58,7 +55,6 @@ final case class MainConfig(debug: Boolean = false,
     val swiftRenderer = SwiftRenderer(stringyOutputMonoid)
     val objcRenderer = ObjectiveCRenderer(stringyOutputMonoid)
     val androidRenderer = AndroidRenderer(stringyOutputMonoid)
-    val initialRenderer = InitialRenderer(FastMonoid.ToString[InitialSVG]())
 
     if (input.file.isDirectory) {
       android.foreach(_.mkdirs())
@@ -82,11 +78,11 @@ final case class MainConfig(debug: Boolean = false,
       Task.gatherUnordered(
         svgInputFiles.zipWithIndex.map {
           case (i, idx) =>
-            runWithRenderer(i, androidRenderer, androidOutputFiles(idx), swiftRenderer, swiftOutputFiles(idx), objcRenderer, objcOutputFiles(idx), initialRenderer)
+            runWithRenderer(i, androidRenderer, androidOutputFiles(idx), swiftRenderer, swiftOutputFiles(idx), objcRenderer, objcOutputFiles(idx))
         }
       ).map(_ => ())
     } else {
-      runWithRenderer(input.file, androidRenderer, android, swiftRenderer, swift, objcRenderer, objc, initialRenderer)
+      runWithRenderer(input.file, androidRenderer, android, swiftRenderer, swift, objcRenderer, objc)
     }
   }
 
@@ -105,140 +101,139 @@ final case class MainConfig(debug: Boolean = false,
   def runWithRenderer[AP, SP, OP](inputFile: File,
                                   andy: FinalSVG[Vector[String]] {type Paths = AP}, androidOutput: Option[File],
                                   swifty: FinalSVG[Vector[String]] {type Paths = SP}, swiftOutput: Option[File],
-                                  objcy: FinalSVG[Vector[String]] {type Paths = OP}, objcOutput: Option[File],
-                                  initial: FinalSVG[Vector[String]] {type Paths = Vector[InitialPath]})(implicit sch: Scheduler): Task[Unit] = {
+                                  objcy: FinalSVG[Vector[String]] {type Paths = OP}, objcOutput: Option[File])(implicit sch: Scheduler): Task[Unit] = {
     val androidWriter: Option[PrintStream] = androidOutput.map(new PrintStream(_))
     val swiftWriter: Option[PrintStream] = swiftOutput.map(new PrintStream(_))
     val objcWriter: Option[PrintStream] = objcOutput.map(new PrintStream(_))
 
     val renderer = new FinalSVG[Vector[() => Unit]] {
-      override type Paths = (Option[AP], Option[SP], Option[OP], Option[Vector[InitialPath]])
+      override type Paths = (Option[AP], Option[SP], Option[OP], Option[Vector[String]])
       override val path: FinalPath[Paths] = new FinalPath[Paths] {
         override val empty: Paths =
           (androidWriter.as(andy.path.empty),
             swiftWriter.as(swifty.path.empty),
             objcWriter.as(objcy.path.empty),
-            if (debug) Some(initial.path.empty) else None)
+            if (debug) Some(Vector.empty) else None)
 
         override def append(fst: Paths, snd: Paths): Paths =
           ((fst._1 |@| snd._1).map(andy.path.append),
             (fst._2 |@| snd._2).map(swifty.path.append),
             (fst._3 |@| snd._3).map(objcy.path.append),
-            (fst._4 |@| snd._4).map(_ ++ _))
+            if (debug) (fst._4 |@| snd._4).map(_ ++ _) else None)
 
         override def closePath(): Paths =
           (Some(andy.path.closePath()),
             Some(swifty.path.closePath()),
             Some(objcy.path.closePath()),
-            if (debug) Some(initial.path.closePath()) else None)
+            if (debug) Some(Vector("ClosePath")) else None)
 
         override def moveTo(x: Double, y: Double): Paths =
           (androidWriter.as(andy.path.moveTo(x, y)),
             swiftWriter.as(swifty.path.moveTo(x, y)),
             objcWriter.as(objcy.path.moveTo(x, y)),
-            if (debug) Some(initial.path.moveTo(x, y)) else None)
+            if (debug) Some(Vector(s"MoveTo($x, $y)")) else None)
 
         override def moveToRel(dx: Double, dy: Double): Paths =
           (androidWriter.as(andy.path.moveToRel(dx, dy)),
             swiftWriter.as(swifty.path.moveToRel(dx, dy)),
             objcWriter.as(objcy.path.moveToRel(dx, dy)),
-            if (debug) Some(initial.path.moveToRel(dx, dy)) else None)
+            if (debug) Some(Vector(s"MoveToRel($dx, $dy)")) else None)
 
         override def lineTo(x: Double, y: Double): Paths =
           (androidWriter.as(andy.path.lineTo(x, y)),
             swiftWriter.as(swifty.path.lineTo(x, y)),
             objcWriter.as(objcy.path.lineTo(x, y)),
-          if (debug) Some(initial.path.lineTo(x, y)) else None)
+          if (debug) Some(Vector(s"LineTo($x, $y)")) else None)
 
         override def lineToRel(dx: Double, dy: Double): Paths =
           (androidWriter.as(andy.path.lineToRel(dx, dy)),
             swiftWriter.as(swifty.path.lineToRel(dx, dy)),
             objcWriter.as(objcy.path.lineToRel(dx, dy)),
-          if (debug) Some(initial.path.lineToRel(dx, dy)) else None)
+          if (debug) Some(Vector(s"LineToRel($dx, $dy)")) else None)
 
         override def verticalLineTo(y: Double): Paths =
           (androidWriter.as(andy.path.verticalLineTo(y)),
             swiftWriter.as(swifty.path.verticalLineTo(y)),
             objcWriter.as(objcy.path.verticalLineTo(y)),
-          if (debug) Some(initial.path.verticalLineTo(y)) else None)
+          if (debug) Some(Vector(s"LineTo($y)")) else None)
 
         override def verticalLineToRel(dy: Double): Paths =
           (androidWriter.as(andy.path.verticalLineToRel(dy)),
             swiftWriter.as(swifty.path.verticalLineToRel(dy)),
             objcWriter.as(objcy.path.verticalLineToRel(dy)),
-          if (debug) Some(initial.path.verticalLineToRel(dy)) else None)
+          if (debug) Some(Vector(s"LineToRel($dy)")) else None)
 
         override def horizLineTo(x: Double): Paths =
           (androidWriter.as(andy.path.horizLineTo(x)),
             swiftWriter.as(swifty.path.horizLineTo(x)),
             objcWriter.as(objcy.path.horizLineTo(x)),
-          if (debug) Some(initial.path.horizLineTo(x)) else None)
+          if (debug) Some(Vector(s"HorizLineTo($x)")) else None)
 
         override def horizLineToRel(dx: Double): Paths =
           (androidWriter.as(andy.path.horizLineToRel(dx)),
             swiftWriter.as(swifty.path.horizLineToRel(dx)),
             objcWriter.as(objcy.path.horizLineToRel(dx)),
-          if (debug) Some(initial.path.horizLineToRel(dx)) else None)
+          if (debug) Some(Vector(s"HorizLineToRel($dx)")) else None)
 
         override def cubic(x1: Double, y1: Double, x2: Double, y2: Double, x: Double, y: Double): Paths =
           (androidWriter.as(andy.path.cubic(x1, y1, x2, y2, x, y)),
             swiftWriter.as(swifty.path.cubic(x1, y1, x2, y2, x, y)),
             objcWriter.as(objcy.path.cubic(x1, y1, x2, y2, x, y)),
-          if (debug) Some(initial.path.cubic(x1, y1, x2, y2, x, y)) else None)
+          if (debug) Some(Vector(s"Cubic($x1, $y1, $x2, $y2, $x, $y)")) else None)
 
         override def cubicRel(x1: Double, y1: Double, x2: Double, y2: Double, dx: Double, dy: Double): Paths =
           (androidWriter.as(andy.path.cubicRel(x1, y1, x2, y2, dx, dy)),
             swiftWriter.as(swifty.path.cubicRel(x1, y1, x2, y2, dx, dy)),
             objcWriter.as(objcy.path.cubicRel(x1, y1, x2, y2, dx, dy)),
-          if (debug) Some(initial.path.cubicRel(x1, y1, x2, y2, dx, dy)) else None)
+          if (debug) Some(Vector(s"CubicRel($x1, $y1, $x2, $y2, $dx, $dy)")) else None)
 
         override def smoothCubic(x2: Double, y2: Double, x: Double, y: Double): Paths =
           (androidWriter.as(andy.path.smoothCubic(x2, y2, x, y)),
             swiftWriter.as(swifty.path.smoothCubic(x2, y2, x, y)),
             objcWriter.as(objcy.path.smoothCubic(x2, y2, x, y)),
-          if (debug) Some(initial.path.smoothCubic(x2, y2, x, y)) else None)
+          if (debug) Some(Vector(s"SmoothCubic($x2, $y2, $x, $y)")) else None)
 
         override def smoothQuad(x: Double, y: Double): Paths =
           (androidWriter.as(andy.path.smoothQuad(x, y)),
             swiftWriter.as(swifty.path.smoothQuad(x, y)),
             objcWriter.as(objcy.path.smoothQuad(x, y)),
-          if (debug) Some(initial.path.smoothQuad(x, y)) else None)
+          if (debug) Some(Vector(s"SmoothQuad($x, $y)")) else None)
 
         override def smoothQuadRel(dx: Double, dy: Double): Paths =
           (androidWriter.as(andy.path.smoothQuadRel(dx, dy)),
             swiftWriter.as(swifty.path.smoothQuadRel(dx, dy)),
             objcWriter.as(objcy.path.smoothQuadRel(dx, dy)),
-          if (debug) Some(initial.path.smoothQuadRel(dx, dy)) else None)
+          if (debug) Some(Vector(s"SmoothQuadRel($dx, $dy)")) else None)
 
         override def elliptic(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, x: Double, y: Double): Paths =
           (androidWriter.as(andy.path.elliptic(rx, ry, rotX, largeArc, sweep, x, y)),
             swiftWriter.as(swifty.path.elliptic(rx, ry, rotX, largeArc, sweep, x, y)),
             objcWriter.as(objcy.path.elliptic(rx, ry, rotX, largeArc, sweep, x, y)),
-          if (debug) Some(initial.path.elliptic(rx, ry, rotX, largeArc, sweep, x, y)) else None)
+          if (debug) Some(Vector(s"Elliptic($rx, $ry, $rotX, $largeArc, $sweep, $x, $y)")) else None)
 
         override def smoothCubicRel(x2: Double, y2: Double, dx: Double, dy: Double): Paths =
           (androidWriter.as(andy.path.smoothCubicRel(x2, y2, dx, dy)),
             swiftWriter.as(swifty.path.smoothCubicRel(x2, y2, dx, dy)),
             objcWriter.as(objcy.path.smoothCubicRel(x2, y2, dx, dy)),
-          if (debug) Some(initial.path.smoothCubicRel(x2, y2, dx, dy)) else None)
+          if (debug) Some(Vector(s"SmoothCubicRel($x2, $y2, $dx, $dy)")) else None)
 
         override def quad(x1: Double, y1: Double, x: Double, y: Double): Paths =
           (androidWriter.as(andy.path.quad(x1, y1, x, y)),
             swiftWriter.as(swifty.path.quad(x1, y1, x, y)),
             objcWriter.as(objcy.path.quad(x1, y1, x, y)),
-          if (debug) Some(initial.path.quad(x1, y1, x, y)) else None)
+          if (debug) Some(Vector(s"Quad($x1, $y1, $x, $y)")) else None)
 
         override def quadRel(x1: Double, y1: Double, dx: Double, dy: Double): Paths =
           (androidWriter.as(andy.path.quadRel(x1, y1, dx, dy)),
             swiftWriter.as(swifty.path.quadRel(x1, y1, dx, dy)),
             objcWriter.as(objcy.path.quadRel(x1, y1, dx, dy)),
-          if (debug) Some(initial.path.quadRel(x1, y1, dx, dy)) else None)
+          if (debug) Some(Vector(s"QuadRel($x1, $y1, $dx, $dy)")) else None)
 
         override def ellipticRel(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, dx: Double, dy: Double): Paths =
           (androidWriter.as(andy.path.ellipticRel(rx, ry, rotX, largeArc, sweep, dx, dy)),
             swiftWriter.as(swifty.path.ellipticRel(rx, ry, rotX, largeArc, sweep, dx, dy)),
             objcWriter.as(objcy.path.ellipticRel(rx, ry, rotX, largeArc, sweep, dx, dy)),
-          if (debug) Some(initial.path.ellipticRel(rx, ry, rotX, largeArc, sweep, dx, dy)) else None)
+          if (debug) Some(Vector(s"EllipticRel($rx, $ry, $rotX, $largeArc, $sweep, $dx, $dy)")) else None)
       }
 
       override val empty: scala.Vector[() => Unit] = Vector.empty
@@ -250,21 +245,28 @@ final case class MainConfig(debug: Boolean = false,
         androidWriter.foreach(writer => andy.circle(x, y, r).foreach(writer.append(_)))
         objcWriter.foreach(writer => objcy.circle(x, y, r).foreach(writer.append(_)))
         swiftWriter.foreach(writer => swifty.circle(x, y, r).foreach(writer.append(_)))
-        if (debug) initial.circle(x, y, r).foreach(System.out.println)
+        if (debug) println(s"circle($x, $y, $r)")
       })
 
       override def ellipse(x: Double, y: Double, rx: Double, ry: Double): scala.Vector[() => Unit] = Vector({ () =>
         androidWriter.foreach(writer => andy.ellipse(x, y, rx, ry).foreach(writer.append(_)))
         objcWriter.foreach(writer => objcy.ellipse(x, y, rx, ry).foreach(writer.append(_)))
         swiftWriter.foreach(writer => swifty.ellipse(x, y, rx, ry).foreach(writer.append(_)))
-        if (debug) initial.ellipse(x, y, rx, ry).foreach(System.out.println)
+        if (debug) println(s"ellipse($x, $y, $rx, $ry)")
+      })
+
+      override def rect(x: Double, y: Double, rx: Double, ry: Double): scala.Vector[() => Unit] = Vector({ () =>
+        androidWriter.foreach(writer => andy.rect(x, y, rx, ry).foreach(writer.append(_)))
+        objcWriter.foreach(writer => objcy.rect(x, y, rx, ry).foreach(writer.append(_)))
+        swiftWriter.foreach(writer => swifty.rect(x, y, rx, ry).foreach(writer.append(_)))
+        if (debug) println(s"rect($x, $y, $rx, $ry)")
       })
 
       override def text(text: String, x: Double, y: Double): scala.Vector[() => Unit] = Vector({ () =>
         androidWriter.foreach(writer => andy.text(text, x, y).foreach(writer.append(_)))
         swiftWriter.foreach(writer => andy.text(text, x, y).foreach(writer.append(_)))
         objcWriter.foreach(writer => andy.text(text, x, y).foreach(writer.append(_)))
-        if (debug) initial.text(text, x, y).foreach(System.out.println)
+        if (debug) println(s"text($text, $x, $y)")
       })
 
       override def includePath(paths: Paths): scala.Vector[() => Unit] = Vector({ () =>

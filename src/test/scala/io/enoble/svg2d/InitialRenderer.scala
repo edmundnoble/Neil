@@ -1,11 +1,8 @@
-package io
-package enoble
-package svg2d
-package render
+package io.enoble.svg2d
 
 import cats.Monoid
+import InitialSVG._
 import io.enoble.svg2d.ast._
-import io.enoble.svg2d.ast.InitialSVG._
 
 case class InitialCode(fragments: Vector[InitialSVG]) {
   def asString: String = fragments.mkString("\n")
@@ -43,4 +40,7 @@ final case class InitialRenderer[A](stringy: FastMonoid[InitialSVG, A]) extends 
     in(DrawPath(paths: _*))
 
   override val path: FinalPath[Vector[InitialPath]] = InitialPathRenderer
+
+  override def rect(x: Double, y: Double, w: Double, h: Double): A =
+    in(DrawRect(x, y, w, h))
 }

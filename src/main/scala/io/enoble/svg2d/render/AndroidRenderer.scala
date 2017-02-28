@@ -70,6 +70,9 @@ final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extend
     outputLine(fm"c.drawOval(new RectF($left, $top, $right, $bottom), p);")
   }
 
+  override def rect(x: Double, y: Double, w: Double, h: Double): A =
+    outputLine(fm"c.drawRect($x, ${y + h}, ${x + w}, $y, p);")
+
   // TODO: WHY DO I HAVE TO DO THIS TO MY POOR ESCAPEES
   override def text(text: String, x: Double, y: Double): A =
     outputLine(fm"c.drawText(${"\""}$text${"\""}, $x, $y, p);")

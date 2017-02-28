@@ -34,4 +34,12 @@ package object svg2d {
       sb.result()
     }
   }
+
+  implicit final class sbActionOps(val action: SBAction) extends AnyVal {
+    def asString: String = {
+      val sb = new StringBuilder()
+      action(sb)
+      sb.result()
+    }
+  }
 }

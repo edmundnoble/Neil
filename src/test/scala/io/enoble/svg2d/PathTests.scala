@@ -2,9 +2,7 @@ package io
 package enoble
 package svg2d
 
-import io.enoble.svg2d.ast.InitialPath._
-import io.enoble.svg2d.ast._
-import io.enoble.svg2d.render.InitialPathRenderer
+import InitialPath._
 import io.enoble.svg2d.xmlparse.Path
 import io.enoble.svg2d.xmlparse.Path.Parsers
 import org.scalatest.FreeSpec

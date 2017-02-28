@@ -1,7 +1,4 @@
-package io
-package enoble
-package svg2d
-package ast
+package io.enoble.svg2d
 
 sealed trait InitialPath
 

@@ -16,4 +16,5 @@ final case class ObjectiveCRenderer[A](stringyMonoid: FastMonoid[String, A]) ext
   override def text(text: String, x: Double, y: Double) = empty
   override def includePath(paths: HNil) = empty
   override val path: FinalPath[HNil] = FinalPath.const(HNil)
+  override def rect(x: Double, y: Double, w: Double, h: Double): A = empty
 }

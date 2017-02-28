@@ -5,8 +5,6 @@ package ast
 
 import cats.Cartesian
 import cats.functor.Invariant
-import io.enoble.svg2d.ast.InitialSVG.{DrawCircle, DrawEllipse, DrawPath, DrawText}
-import shapeless._
 
 trait FinalSVG[A] {
   type Paths
@@ -17,9 +15,15 @@ trait FinalSVG[A] {
 
   def append(fst: A, snd: A): A
 
+  final def combineAll(as: A*): A =
+    if (as.isEmpty) empty
+    else as.reduceLeft((x, y) => append(y, x))
+
   def circle(x: Double, y: Double, r: Double): A
 
   def ellipse(x: Double, y: Double, rx: Double, ry: Double): A
+
+  def rect(x: Double, y: Double, w: Double, h: Double): A
 
   def text(text: String, x: Double, y: Double): A
 
@@ -28,17 +32,6 @@ trait FinalSVG[A] {
 }
 
 object FinalSVG {
-  final def renderInitial[A](finalSVG: FinalSVG[A])(ins: Seq[InitialSVG]): A = {
-    def render(initia: InitialSVG): A = initia match {
-      case DrawCircle(x, y, r) => finalSVG.circle(x, y, r)
-      case DrawEllipse(x, y, rx, ry) => finalSVG.ellipse(x, y, rx, ry)
-      case DrawText(t, x, y) => finalSVG.text(t, x, y)
-      case paths: DrawPath => finalSVG.includePath(FinalPath.renderInitial(finalSVG.path)(paths.commands))
-    }
-    if (ins.isEmpty) finalSVG.empty
-    else ins.tail.foldLeft(render(ins.head))((b, i) => finalSVG.append(b, render(i)))
-  }
-
   def const[A](a: A): FinalSVG[A] = new FinalSVG[A] {
     override type Paths = A
     override val path: FinalPath[Paths] = FinalPath.const(a)
@@ -49,6 +42,8 @@ object FinalSVG {
     override def circle(x: Double, y: Double, r: Double): A = a
 
     override def ellipse(x: Double, y: Double, rx: Double, ry: Double): A = a
+
+    override def rect(x: Double, y: Double, w: Double, h: Double): A = a
 
     override def text(text: String, x: Double, y: Double): A = a
 
@@ -81,6 +76,9 @@ object FinalSVG {
 
         override def includePath(paths: Paths): B =
           f(fa.includePath(paths))
+
+        override def rect(x: Double, y: Double, w: Double, h: Double): B =
+          f(fa.rect(x, y, w, h))
       }
 
     override def product[A, B](fa: FinalSVG[A], fb: FinalSVG[B]): FinalSVG[(A, B)] =
@@ -114,68 +112,14 @@ object FinalSVG {
 
         override val path: FinalPath[Paths] =
           FinalPath.instance.product(fa.path, fb.path)
+
+        override def rect(x: Double, y: Double, w: Double, h: Double): (A, B) =
+          (fa.rect(x, y, w, h),
+            fb.rect(x, y, w, h))
       }
   }
 
-  def hconsSequence[H <: HList, HP <: HList, A](next: FinalSVG[A], finalPath: FinalSVG[H] { type Paths = HP }): FinalSVG[A :: H] { type Paths = next.Paths :: finalPath.Paths } = new FinalSVG[A :: H] {
-    override val empty: A :: H =
-      next.empty :: finalPath.empty
-
-    override def append(fst: A :: H, snd: A :: H): A :: H =
-      next.append(fst.head, snd.head) :: finalPath.append(fst.tail, snd.tail)
-
-    override type Paths = next.Paths :: finalPath.Paths
-
-    override val path: FinalPath[Paths] =
-      FinalPath.hconsSequence(next.path, finalPath.path)
-
-    override def circle(x: Double, y: Double, r: Double): A :: H =
-      next.circle(x, y, r) :: finalPath.circle(x, y, r)
-
-    override def ellipse(x: Double, y: Double, rx: Double, ry: Double): A :: H =
-      next.ellipse(x, y, rx, ry) :: finalPath.ellipse(x, y, rx, ry)
-
-    override def text(text: String, x: Double, y: Double): A :: H =
-      next.text(text, x, y) :: finalPath.text(text, x, y)
-
-    override def includePath(paths: Paths): A :: H =
-      next.includePath(paths.head) :: finalPath.includePath(paths.tail)
-  }
-
-  val hnilSequence: FinalSVG[HNil] { type Paths = HNil } = new FinalSVG[HNil] {
-    override val empty: HNil = HNil
-
-    override def append(fst: HNil, snd: HNil): HNil = HNil
-
-    override type Paths = HNil
-
-    override val path: FinalPath[HNil] = FinalPath.hnilSequence
-
-    override def circle(x: Double, y: Double, r: Double): HNil = HNil
-
-    override def ellipse(x: Double, y: Double, rx: Double, ry: Double): HNil = HNil
-
-    override def text(text: String, x: Double, y: Double): HNil = HNil
-
-    override def includePath(paths: HNil): HNil = HNil
-  }
-
   def sequenceOption[A](opt: Option[FinalSVG[A]]): FinalSVG[Option[A]] =
-    opt.fold[FinalSVG[Option[A]]](FinalSVG.const(None))((f: FinalSVG[A]) => new FinalSVG[Option[A]] {
-      override type Paths = f.Paths
-      override val path: FinalPath[f.Paths] = f.path
-      override val empty: Option[A] = Some(f.empty)
-
-      override def append(fst: Option[A], snd: Option[A]): Option[A] =
-        Some(f.append(fst.getOrElse(f.empty), snd.getOrElse(f.empty)))
-
-      override def circle(x: Double, y: Double, r: Double): Option[A] = Some(f.circle(x, y, r))
-
-      override def ellipse(x: Double, y: Double, rx: Double, ry: Double): Option[A] = Some(f.ellipse(x, y, rx, ry))
-
-      override def text(text: String, x: Double, y: Double): Option[A] = Some(f.text(text, x, y))
-
-      override def includePath(paths: f.Paths): Option[A] = Some(f.includePath(paths))
-    })
+    opt.fold[FinalSVG[Option[A]]](FinalSVG.const(None))(f => instance.imap[A, Option[A]](f)(Some(_))(_.getOrElse(f.empty)))
 
 }
