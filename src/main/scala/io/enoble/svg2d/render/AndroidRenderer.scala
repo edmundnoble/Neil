@@ -6,7 +6,6 @@ import cats.Eval
 import cats.data.{State, StateT}
 import cats.implicits._
 import io.enoble.svg2d.ast._
-import svg2d.Coords
 
 import scala.annotation.tailrec
 

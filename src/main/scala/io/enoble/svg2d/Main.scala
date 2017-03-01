@@ -11,14 +11,13 @@ import io.enoble.svg2d.render._
 import io.enoble.svg2d.xmlparse.{Parse, XMLConsumer}
 import monix.eval.Task
 import monix.execution.Scheduler
-import monix.cats._
 import caseapp._
 import caseapp.core.{ArgParser, Messages, WithHelp}
 
 import scala.concurrent.Await
 import scala.concurrent.duration.Duration
 import scala.io.Source
-import scala.xml.{MetaData, NamespaceBinding, NodeSeq}
+import scala.xml.MetaData
 import Main._
 
 @AppName("Neil")
@@ -331,7 +330,7 @@ object Main {
         Console.err.println(err)
         sys.exit(1)
 
-      case Right((WithHelp(usage, help, t), remainingArgs, extraArgs)) =>
+      case Right((WithHelp(usage, help, t), _, _)) =>
         if (help) {
           println(Messages[MainConfig].withHelp.helpMessage)
           sys.exit(0)

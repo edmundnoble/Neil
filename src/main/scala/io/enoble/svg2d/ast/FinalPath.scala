@@ -5,7 +5,6 @@ package ast
 
 import cats.Cartesian
 import cats.functor.Invariant
-import shapeless._
 
 trait FinalPath[A] {
   val empty: A

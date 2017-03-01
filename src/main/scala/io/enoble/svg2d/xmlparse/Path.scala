@@ -4,28 +4,20 @@ package svg2d
 package xmlparse
 
 import fastparse.core.Implicits.Repeater
-import fastparse.core.Implicits.Repeater.UnitRepeater
 import io.enoble.svg2d.ast._
 
-import scala.collection.immutable.VectorBuilder
-import scala.collection.mutable
-import cats.instances.vector._
-import cats.syntax.foldable._
-
-import scala.annotation.switch
 import scala.xml.MetaData
 
 object Path extends Model {
 
   import fastparse.all._
 
-  import xml.Elem
-
   override val label: String = "path"
 
   override def apply[A](v1: MetaData, svg: FinalSVG[A]): Option[A] = {
     val pathCoords = v1.getOpt("d")
-    val parsedPath: Option[Parsed[svg.Paths]] = pathCoords.map(s => new Path.Parsers[svg.Paths](svg.path).path.parse(s))
+    val parsedPath: Option[Parsed[svg.Paths]] =
+      pathCoords.map(s => new Path.Parsers[svg.Paths](svg.path).path.parse(s))
     if (parsedPath.isEmpty) System.err.println("No 'd' attribute found in path element")
     parsedPath.flatMap {
       case Parsed.Success(path, _) => Some(svg.includePath(path))
@@ -49,25 +41,29 @@ object Path extends Model {
     val Digits = NamedFunction('0' to '9' contains (_: Char), "Digits")
     val StringChars = NamedFunction(!"\"\\".contains(_: Char), "StringChars")
 
+    val plusminusOpt: P[Unit] = P(CharIn("+-").?)
     val space = P(CharsWhile(Whitespace).?)
     val digits = P(CharsWhile(Digits))
-    val exponent = P(CharIn("eE") ~ CharIn("+-").? ~ digits)
-    val number: P[Double] = P(CharIn("-").? ~ ("0" | CharIn('1' to '9') ~/ digits.?) ~/ ("." ~ digits).? ~ exponent.?).!.map(_.toDouble)
+    val exponent = P(CharIn("eE") ~ plusminusOpt ~ digits)
+    val number: P[Double] = P(
+      plusminusOpt ~ ("0" | CharIn('1' to '9') ~/ digits.?) ~/
+        ("." ~ digits.?).? ~ exponent.?
+    ).!.map(_.toDouble)
 
     val commaWsp = P((space ~ ",".? ~ space) | ("," ~ space))
     val wspDouble = P(space ~ number)
 
-    val coordPair: P[Coords] = (number ~ commaWsp) ~/ number
+    val coordPair: P[Coords] = (number ~ commaWsp) ~ number
     val twoCoordPairs: P[(Double, Double, Double, Double)] =
-      P(number ~ commaWsp ~/ number ~ commaWsp ~/
-        number ~ commaWsp ~/ number)
+      P(coordPair ~ commaWsp ~
+        number ~ commaWsp ~ number)
     val threeCoordPairs: P[(Double, Double, Double, Double, Double, Double)] =
-      P(twoCoordPairs ~ commaWsp ~/ number ~ commaWsp ~/ number)
+      P(twoCoordPairs ~ commaWsp ~ number ~ commaWsp ~ number)
 
     val flag: P[Boolean] = CharIn("01").!.map(s => s.charAt(0) == '1')
 
     val ellipticParam: P[(Double, Double, Double, Boolean, Boolean, Double, Double)] =
-      number ~ commaWsp ~ number ~ commaWsp ~
+      coordPair ~ commaWsp ~
         number ~ commaWsp ~
         flag ~ commaWsp ~ flag ~ commaWsp ~
         number ~ commaWsp ~ number
@@ -133,7 +129,7 @@ object Path extends Model {
     )
 
     val quad: P[A] = P(
-     (qSpace ~ twoCoordPairs.map((pathCtx.quadRel _).tupled).rep(1, sep = commaWsp)) |
+      (qSpace ~ twoCoordPairs.map((pathCtx.quadRel _).tupled).rep(1, sep = commaWsp)) |
         (QSpace ~ twoCoordPairs.map((pathCtx.quad _).tupled).rep(1, sep = commaWsp))
     )
 
@@ -143,7 +139,7 @@ object Path extends Model {
     )
 
     val cubic: Parser[A] = P(
-       (cSpace ~ threeCoordPairs.map((pathCtx.cubicRel _).tupled).rep(1, sep = commaWsp)) |
+      (cSpace ~ threeCoordPairs.map((pathCtx.cubicRel _).tupled).rep(1, sep = commaWsp)) |
         (CSpace ~ threeCoordPairs.map((pathCtx.cubic _).tupled).rep(1, sep = commaWsp))
     )
 
@@ -158,11 +154,10 @@ object Path extends Model {
       closePath | lineTo | horizLineTo | vertLineTo | cubic | smoothCubic | quad | ellipticalArc
     )
 
-    val pathCommands: Parser[A] =
+    val path: Parser[A] =
       P(((moveTo ~ space) ~ (command ~ space).rep(pathRepeater))
         .map((pathCtx.append _).tupled)
         .rep(1))
-    val path: Parser[A] = P(pathCommands)
   }
 
 }
