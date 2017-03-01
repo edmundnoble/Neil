@@ -33,6 +33,10 @@ libraryDependencies += "com.lihaoyi" %% "fastparse" % "0.4.2"
 
 libraryDependencies += "com.github.alexarchambault" %% "case-app" % "1.2.0-M1"
 
+test in assembly := {}
+
+mainClass in assembly := Some("io.enoble.svg2d.Main")
+
 resolvers += Resolver.sonatypeRepo("public")
 
 javacOptions += "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"

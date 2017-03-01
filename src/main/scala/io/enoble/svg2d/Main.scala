@@ -2,7 +2,7 @@ package io
 package enoble
 package svg2d
 
-import java.io.{File, FilenameFilter, PrintStream}
+import java.io.{BufferedWriter, File, FileOutputStream, FilenameFilter, OutputStreamWriter, PrintStream}
 import java.util.concurrent.Executors
 
 import cats.implicits._
@@ -106,10 +106,10 @@ final case class MainConfig(debug: Boolean = false,
   def runWithRenderer[AP, SP, OP](inputFile: File,
                                   andy: FinalSVG[Vector[String]] {type Paths = AP}, andySurrounders: Surrounders, androidOutput: Option[File],
                                   swifty: FinalSVG[Vector[String]] {type Paths = SP}, swiftySurrounders: Surrounders, swiftOutput: Option[File],
-                                  objcy: FinalSVG[Vector[String]] {type Paths = OP}, objcySurrounders: Surrounders, objcOutput: Option[File])(implicit sch: Scheduler): Task[Unit] = {
-    val androidWriter: Option[PrintStream] = androidOutput.map(new PrintStream(_))
-    val swiftWriter: Option[PrintStream] = swiftOutput.map(new PrintStream(_))
-    val objcWriter: Option[PrintStream] = objcOutput.map(new PrintStream(_))
+                                  objcy: FinalSVG[Vector[String]] {type Paths = OP}, objcySurrounders: Surrounders, objcOutput: Option[File])(implicit sch: Scheduler): Task[Unit] = Task.defer {
+    val androidWriter: Option[BufferedWriter] = androidOutput.map(f => new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f))))
+    val swiftWriter: Option[BufferedWriter] = swiftOutput.map(f => new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f))))
+    val objcWriter: Option[BufferedWriter] = objcOutput.map(f => new BufferedWriter(new OutputStreamWriter(new FileOutputStream(f))))
 
     val renderer = new FinalSVG[Vector[() => Unit]] {
       override type Paths = (Option[AP], Option[SP], Option[OP], Option[Vector[String]])
@@ -247,48 +247,48 @@ final case class MainConfig(debug: Boolean = false,
         fst ++ snd
 
       override def circle(x: Double, y: Double, r: Double): scala.Vector[() => Unit] = Vector({ () =>
-        androidWriter.foreach(writer => andy.circle(x, y, r).foreach(writer.append(_)))
-        objcWriter.foreach(writer => objcy.circle(x, y, r).foreach(writer.append(_)))
-        swiftWriter.foreach(writer => swifty.circle(x, y, r).foreach(writer.append(_)))
+        androidWriter.foreach(writer => andy.circle(x, y, r).foreach(writer.write))
+        objcWriter.foreach(writer => objcy.circle(x, y, r).foreach(writer.write))
+        swiftWriter.foreach(writer => swifty.circle(x, y, r).foreach(writer.write))
         if (debug) println(s"circle($x, $y, $r)")
       })
 
       override def ellipse(x: Double, y: Double, rx: Double, ry: Double): scala.Vector[() => Unit] = Vector({ () =>
-        androidWriter.foreach(writer => andy.ellipse(x, y, rx, ry).foreach(writer.append(_)))
-        objcWriter.foreach(writer => objcy.ellipse(x, y, rx, ry).foreach(writer.append(_)))
-        swiftWriter.foreach(writer => swifty.ellipse(x, y, rx, ry).foreach(writer.append(_)))
+        androidWriter.foreach(writer => andy.ellipse(x, y, rx, ry).foreach(writer.write))
+        objcWriter.foreach(writer => objcy.ellipse(x, y, rx, ry).foreach(writer.write))
+        swiftWriter.foreach(writer => swifty.ellipse(x, y, rx, ry).foreach(writer.write))
         if (debug) println(s"ellipse($x, $y, $rx, $ry)")
       })
 
       override def rect(x: Double, y: Double, rx: Double, ry: Double): scala.Vector[() => Unit] = Vector({ () =>
-        androidWriter.foreach(writer => andy.rect(x, y, rx, ry).foreach(writer.append(_)))
-        objcWriter.foreach(writer => objcy.rect(x, y, rx, ry).foreach(writer.append(_)))
-        swiftWriter.foreach(writer => swifty.rect(x, y, rx, ry).foreach(writer.append(_)))
+        androidWriter.foreach(writer => andy.rect(x, y, rx, ry).foreach(writer.write))
+        objcWriter.foreach(writer => objcy.rect(x, y, rx, ry).foreach(writer.write))
+        swiftWriter.foreach(writer => swifty.rect(x, y, rx, ry).foreach(writer.write))
         if (debug) println(s"rect($x, $y, $rx, $ry)")
       })
 
       override def text(text: String, x: Double, y: Double): scala.Vector[() => Unit] = Vector({ () =>
-        androidWriter.foreach(writer => andy.text(text, x, y).foreach(writer.append(_)))
-        swiftWriter.foreach(writer => andy.text(text, x, y).foreach(writer.append(_)))
-        objcWriter.foreach(writer => andy.text(text, x, y).foreach(writer.append(_)))
+        androidWriter.foreach(writer => andy.text(text, x, y).foreach(writer.write))
+        swiftWriter.foreach(writer => andy.text(text, x, y).foreach(writer.write))
+        objcWriter.foreach(writer => andy.text(text, x, y).foreach(writer.write))
         if (debug) println(s"text($text, $x, $y)")
       })
 
       override def includePath(paths: Paths): scala.Vector[() => Unit] = Vector({ () =>
-        (androidWriter |@| paths._1).map((writer, p) => andy.includePath(p).foreach(writer.append(_)))
-        (swiftWriter |@| paths._2).map((writer, p) => swifty.includePath(p).foreach(writer.append(_)))
-        (objcWriter |@| paths._3).map((writer, p) => objcy.includePath(p).foreach(writer.append(_)))
+        (androidWriter |@| paths._1).map((writer, p) => andy.includePath(p).foreach(writer.write))
+        (swiftWriter |@| paths._2).map((writer, p) => swifty.includePath(p).foreach(writer.write))
+        (objcWriter |@| paths._3).map((writer, p) => objcy.includePath(p).foreach(writer.write))
         if (debug) paths._4.foreach(_.foreach(System.out.println))
       })
     }
 
-    androidWriter.foreach(_.append(andySurrounders.prefixFromName(inputFile.getName)))
-    swiftWriter.foreach(_.append(swiftySurrounders.prefixFromName(inputFile.getName)))
-    objcWriter.foreach(_.append(objcySurrounders.prefixFromName(inputFile.getName)))
+    androidWriter.foreach(_.write(andySurrounders.prefixFromName(inputFile.getName)))
+    swiftWriter.foreach(_.write(swiftySurrounders.prefixFromName(inputFile.getName)))
+    objcWriter.foreach(_.write(objcySurrounders.prefixFromName(inputFile.getName)))
     run(inputFile, renderer).map(_.foreach(_ ())).map { _ =>
-      androidWriter.foreach(_.append(andySurrounders.suffix))
-      swiftWriter.foreach(_.append(swiftySurrounders.suffix))
-      objcWriter.foreach(_.append(objcySurrounders.suffix))
+      androidWriter.foreach(_.write(andySurrounders.suffix))
+      swiftWriter.foreach(_.write(swiftySurrounders.suffix))
+      objcWriter.foreach(_.write(objcySurrounders.suffix))
       androidWriter.foreach(_.close())
       swiftWriter.foreach(_.close())
       objcWriter.foreach(_.close())
