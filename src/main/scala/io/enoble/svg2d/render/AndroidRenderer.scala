@@ -15,22 +15,22 @@ object AndroidRenderer {
                              lastSecondCubicControlX: Double, lastSecondCubicControlY: Double,
                              lastQuadraticControlX: Double, lastQuadraticControlY: Double,
                              indentation: Int) {
-    @inline def setHere(x: Double = hereX, y: Double = hereY) =
+    @inline def setHere(x: Double = hereX, y: Double = hereY): PathState =
       copy(
         hereX = x, hereY = y,
         lastSecondCubicControlX = Double.NaN, lastSecondCubicControlY = Double.NaN,
         lastQuadraticControlX = Double.NaN, lastQuadraticControlY = Double.NaN
       )
 
-    @inline def addToHere(dx: Double = 0, dy: Double = 0) = copy(
+    @inline def addToHere(dx: Double = 0, dy: Double = 0): PathState = copy(
       hereX = hereX + dx, hereY = hereY + dy,
       lastSecondCubicControlX = Double.NaN, lastSecondCubicControlY = Double.NaN,
       lastQuadraticControlX = Double.NaN, lastQuadraticControlY = Double.NaN
     )
   }
 
-  implicit class fastMonoidInterpolation(val sc: StringContext) extends AnyVal {
-    def fm[A](args: Any*)(implicit fastMonoid: FastMonoid[String, A]): A = {
+  implicit final class fastMonoidInterpolation(val sc: StringContext) extends AnyVal {
+    @inline def fm[A](args: Any*)(implicit fastMonoid: FastMonoid[String, A]): A = {
       import fastMonoid.monoid
       val partIt = sc.parts.iterator
       val argIt = args.iterator
@@ -84,6 +84,7 @@ final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extend
       level - 1
     )
 
+  @inline
   private def outputLine(code: A, indentation: Int = 0): A =
     append(
       indent(code, indentation),
@@ -234,15 +235,37 @@ final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extend
           lastQuadraticControlX = newControlX, lastQuadraticControlY = newControlY,
           lastSecondCubicControlX = Double.NaN, lastSecondCubicControlY = Double.NaN
         ), outputLine(
-          fm"path.rQuadTo($newControlX, $newControlY, $dx, $dy);", indentation = state.indentation
+          fm"path.rQuadTo($newControlX, $newControlY, $dx, $dy);",
+          indentation = state.indentation
         ))
       }
 
+      // TODO: sweep should choose between two ellipses.
       override def elliptic(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, x: Double, y: Double): State[PathState, A] =
-        State.pure(outputLine(fm"???"))
+      State { state =>
+        val left = x - (rx / 2)
+        val top = y + (ry / 2)
+        val right = x + (rx / 2)
+        val bottom = y - (ry / 2)
+        val startAngle = 0
+        val largeArcAdjustedDeltaAngle = if (largeArc) rotX + 180 else rotX
+        (state.setHere(x, y),
+          outputLine(fm"path.arcTo($left, $top, $right, $bottom, $startAngle, ${startAngle + largeArcAdjustedDeltaAngle}, true);"))
+      }
 
       override def ellipticRel(rx: Double, ry: Double, rotX: Double, largeArc: Boolean, sweep: Boolean, dx: Double, dy: Double): State[PathState, A] =
-        State.pure(outputLine(fm"???"))
+        State { state =>
+          val newX = state.hereX + dx
+          val newY = state.hereY + dy
+          val left = newX - (rx / 2)
+          val right = newX + (rx / 2)
+          val bottom = newY - (ry / 2)
+          val top = newY + (ry / 2)
+          val startAngle = 0
+          val largeArcAdjustedDeltaAngle = if (largeArc) rotX + 180 else rotX
+          (state.setHere(newX, newY),
+            outputLine(fm"path.arcTo($left, $top, $right, $bottom, $startAngle, ${startAngle + largeArcAdjustedDeltaAngle}, true);"))
+        }
 
     }
 
@@ -264,4 +287,5 @@ final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extend
       outputLine(in("}"))
     append(intro, append(result, outro))
   }
+
 }
