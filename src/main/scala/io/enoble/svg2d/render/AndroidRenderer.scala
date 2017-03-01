@@ -275,16 +275,16 @@ final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extend
         hereX = 0, hereY = 0,
         lastSecondCubicControlX = Double.NaN, lastSecondCubicControlY = Double.NaN,
         lastQuadraticControlX = Double.NaN, lastQuadraticControlY = Double.NaN,
-        indentation = 1
+        indentation = 3
       )
     ).value
     val intro: A =
       append(
-        outputLine(in("{")),
-        outputLine(in("Path path = new Path();"), indentation = 1)
+        outputLine(in("{"), indentation = 2),
+        outputLine(in("Path path = new Path();"), indentation = 3)
       )
     val outro: A =
-      outputLine(in("}"))
+      outputLine(in("}"), indentation = 2)
     append(intro, append(result, outro))
   }
 
