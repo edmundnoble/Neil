@@ -308,12 +308,12 @@ object Main {
   }
 
   implicit val fileArgParser: ArgParser[File] =
-    ArgParser.instance[File] { s =>
+    ArgParser.instance[File]("file") { s =>
       Right(new File(s))
     }
 
   implicit val existingFileArgParser: ArgParser[ExistingFile] =
-    ArgParser.instance[ExistingFile] { s =>
+    ArgParser.instance[ExistingFile]("existingFile") { s =>
       val file = new File(s)
       if (file.exists()) {
         Right(ExistingFile(file))

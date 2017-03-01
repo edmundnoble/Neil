@@ -31,7 +31,7 @@ libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % "1.0.6"
 
 libraryDependencies += "com.lihaoyi" %% "fastparse" % "0.4.2"
 
-libraryDependencies += "com.github.alexarchambault" %% "case-app" % "1.1.3"
+libraryDependencies += "com.github.alexarchambault" %% "case-app" % "1.2.0-M1"
 
 resolvers += Resolver.sonatypeRepo("public")
 
