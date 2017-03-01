@@ -39,6 +39,9 @@ mainClass in assembly := Some("io.enoble.svg2d.Main")
 
 resolvers += Resolver.sonatypeRepo("public")
 
-javacOptions += "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005"
+// the micro-optimizations are REAL
+javaOptions ++= Seq("-XX:+TieredCompilation", "-XX:CompileThreshold=1")
 
 fork in test := true
+
+fork in run := true

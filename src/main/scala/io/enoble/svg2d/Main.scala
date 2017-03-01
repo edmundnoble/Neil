@@ -125,9 +125,9 @@ final case class MainConfig(debug: Boolean = false,
             if (debug) Some(Vector.empty) else None)
 
         override def append(fst: Paths, snd: Paths): Paths =
-          ((fst._1 |@| snd._1).map(andy.path.append),
-            (fst._2 |@| snd._2).map(swifty.path.append),
-            (fst._3 |@| snd._3).map(objcy.path.append),
+          (fst._1.map2(snd._1)(andy.path.append),
+            fst._2.map2(snd._2)(swifty.path.append),
+            fst._3.map2(snd._3)(objcy.path.append),
             if (debug) (fst._4 |@| snd._4).map(_ ++ _) else None)
 
         override def closePath(): Paths =
@@ -279,9 +279,9 @@ final case class MainConfig(debug: Boolean = false,
       })
 
       override def includePath(paths: Paths): scala.Vector[() => Unit] = Vector({ () =>
-        (androidWriter |@| paths._1).map((writer, p) => andy.includePath(p).foreach(writer.writeStr))
-        (swiftWriter |@| paths._2).map((writer, p) => swifty.includePath(p).foreach(writer.writeStr))
-        (objcWriter |@| paths._3).map((writer, p) => objcy.includePath(p).foreach(writer.writeStr))
+        androidWriter.foreach(writer => andy.includePath(paths._1.get).foreach(writer.writeStr))
+        swiftWriter.foreach(writer => swifty.includePath(paths._2.get).foreach(writer.writeStr))
+        objcWriter.foreach(writer => objcy.includePath(paths._3.get).foreach(writer.writeStr))
         if (debug) paths._4.foreach(_.foreach(System.out.println))
       })
     }
