@@ -2,8 +2,6 @@ package io
 package enoble
 package svg2d
 
-import io.enoble.svg2d.ast.FinalSVG
-
 import scala.util.Try
 import scala.xml.MetaData
 

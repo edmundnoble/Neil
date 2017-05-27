@@ -1,6 +1,6 @@
 package io.enoble.svg2d.xmlparse
 
-import scala.xml.{MetaData, NamespaceBinding}
+import scala.xml.MetaData
 
 trait XMLConsumer[A] {
   val start: A

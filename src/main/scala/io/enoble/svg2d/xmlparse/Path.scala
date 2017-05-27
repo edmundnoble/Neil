@@ -6,6 +6,7 @@ package xmlparse
 import fastparse.core.Implicits.Repeater
 import io.enoble.svg2d.ast._
 
+import scala.collection.mutable.ListBuffer
 import scala.xml.MetaData
 
 object Path extends Model {
@@ -16,11 +17,11 @@ object Path extends Model {
 
   override def apply[A](v1: MetaData, svg: FinalSVG[A]): Option[A] = {
     val pathCoords = v1.getOpt("d")
-    val parsedPath: Option[Parsed[svg.Paths]] =
-      pathCoords.map(s => new Path.Parsers[svg.Paths](svg.path).path.parse(s))
+    val parsedPath: Option[Parsed[PathFun]] =
+      pathCoords.map(s => BaseParsers.path.parse(s))
     if (parsedPath.isEmpty) System.err.println("No 'd' attribute found in path element")
     parsedPath.flatMap {
-      case Parsed.Success(path, _) => Some(svg.includePath(path))
+      case Parsed.Success(path, _) => Some(svg.includePath(path(svg.path)))
       case _: Parsed.Failure =>
         System.err.println(s"Failed to parse path: ${pathCoords.get}")
         None
@@ -37,13 +38,9 @@ object Path extends Model {
       override def toString() = name
     }
 
-    val Whitespace = NamedFunction(" \n".contains(_: Char), "Whitespace")
-    val Digits = NamedFunction('0' to '9' contains (_: Char), "Digits")
-    val StringChars = NamedFunction(!"\"\\".contains(_: Char), "StringChars")
-
     val plusminusOpt: P[Unit] = P(CharIn("+-").?)
-    val space = P(CharsWhile(Whitespace).?)
-    val digits = P(CharsWhile(Digits))
+    val space = P(CharsWhileIn(Array(' ', '\n')).?)
+    val digits = P(CharsWhileIn('0' to '9'))
     val exponent = P(CharIn("eE") ~ plusminusOpt ~ digits)
     val number: P[Double] = P(
       plusminusOpt ~ ("0" | CharIn('1' to '9') ~/ digits.?) ~/
@@ -68,96 +65,90 @@ object Path extends Model {
         flag ~ commaWsp ~ flag ~ commaWsp ~
         number ~ commaWsp ~ number
 
-    val mSpace = "m" ~/ space
-    val MSpace = "M" ~/ space
-    val lSpace = "l" ~/ space
-    val LSpace = "L" ~/ space
-    val hSpace = "h" ~/ space
-    val HSpace = "H" ~/ space
-    val vSpace = "v" ~/ space
-    val VSpace = "V" ~/ space
-    val qSpace = "q" ~/ space
-    val QSpace = "Q" ~/ space
-    val aSpace = "a" ~/ space
-    val ASpace = "A" ~/ space
-    val cSpace = "c" ~/ space
-    val CSpace = "C" ~/ space
-    val sSpace = "s" ~/ space
-    val SSpace = "S" ~/ space
-  }
-
-  final case class Parsers[A](pathCtx: FinalPath[A]) {
-
-    import BaseParsers._
+    type PathParser = P[PathFun]
 
     import fastparse.all._
 
-    import scala.language.implicitConversions
+    implicit def testRepeater[A]: Repeater[A, List[A]] = new Repeater[A, List[A]] {
+      override type Acc = ListBuffer[A]
 
-    class PathBuilder {
-      var soFar: A = pathCtx.empty
+      override def initial: ListBuffer[A] = new ListBuffer
+
+      override def accumulate(t: A, acc: ListBuffer[A]): Unit =
+        acc += t
+
+      override def result(acc: ListBuffer[A]): List[A] =
+        acc.result()
     }
 
-    implicit def pathRepeater: Repeater[A, A] = new Repeater[A, A] {
-      override type Acc = PathBuilder
-
-      override def initial: PathBuilder = new PathBuilder
-
-      override def accumulate(t: A, acc: PathBuilder): Unit =
-        acc.soFar = pathCtx.append(acc.soFar, t)
-
-      override def result(acc: PathBuilder): A =
-        acc.soFar
+    def foldPathFun[T](is: List[T])(ts: T => PathFun): PathFun = new PathFun {
+      def apply[A](pathCtx: FinalPath[A]): A =
+        if (is.isEmpty) pathCtx.empty
+        else is.foldLeft(pathCtx.empty)((b, t) => pathCtx.append(b, ts(t)(pathCtx)))
     }
+
+    def foldPathFunE[T](is: List[PathFun]): PathFun = new PathFun {
+      def apply[A](pathCtx: FinalPath[A]): A =
+        if (is.isEmpty) pathCtx.empty
+        else is.foldLeft(pathCtx.empty)((b, t) => pathCtx.append(b, t(pathCtx)))
+    }
+
 
     // TODO: All of the extra arguments to moveTo should be interpreted as lineTo's, according to the spec
-    val moveTo = P(
-      (mSpace ~ coordPair.map((pathCtx.moveToRel _).tupled).rep(1, sep = commaWsp)) |
-        (MSpace ~ coordPair.map((pathCtx.moveTo _).tupled).rep(1, sep = commaWsp))
+    val moveTo: P[PathFun] = P(
+      ("m" ~/ space ~ coordPair.rep(1, sep = commaWsp)
+        .map(foldPathFun(_)((PathFun.moveToRel _).tupled))) |
+        ("M" ~/ space ~ coordPair.rep(1, sep = commaWsp)
+          .map(foldPathFun(_)((PathFun.moveTo _).tupled)))
     )
-    val lineTo: P[A] = P(
-      (LSpace ~ coordPair.map((pathCtx.lineTo _).tupled).rep(1, sep = commaWsp)) |
-        (lSpace ~ coordPair.map((pathCtx.lineToRel _).tupled).rep(1, sep = commaWsp))
+    val lineTo: P[PathFun] = P(
+      ("L" ~/ space ~ coordPair.rep(1, sep = commaWsp).map(foldPathFun(_)((PathFun.lineTo _).tupled))) |
+        ("l" ~/ space ~ coordPair.rep(1, sep = commaWsp).map(foldPathFun(_)((PathFun.lineToRel _).tupled)))
     )
-    val horizLineTo: P[A] = P(
-      (hSpace ~ wspDouble.map(pathCtx.horizLineToRel).rep(1, sep = commaWsp)) |
-        (HSpace ~ wspDouble.map(pathCtx.horizLineTo).rep(1, sep = commaWsp))
+    val horizLineTo: P[PathFun] = P(
+      ("h" ~/ space ~ wspDouble.rep(1, sep = commaWsp).map(foldPathFun(_)(PathFun.horizLineToRel))) |
+        ("H" ~/ space ~ wspDouble.rep(1, sep = commaWsp).map(foldPathFun(_)(PathFun.horizLineTo)))
     )
-    val vertLineTo: P[A] = P(
-      (vSpace ~ wspDouble.map(pathCtx.verticalLineToRel).rep(1, sep = commaWsp)) |
-        (VSpace ~ wspDouble.map(pathCtx.verticalLineTo).rep(1, sep = commaWsp))
-    )
-
-    val quad: P[A] = P(
-      (qSpace ~ twoCoordPairs.map((pathCtx.quadRel _).tupled).rep(1, sep = commaWsp)) |
-        (QSpace ~ twoCoordPairs.map((pathCtx.quad _).tupled).rep(1, sep = commaWsp))
+    val vertLineTo: P[PathFun] = P(
+      ("v" ~/ space ~ wspDouble.rep(1, sep = commaWsp).map(foldPathFun(_)(PathFun.verticalLineToRel))) |
+        ("V" ~/ space ~ wspDouble.rep(1, sep = commaWsp).map(foldPathFun(_)(PathFun.verticalLineTo)))
     )
 
-    val ellipticalArc: P[A] = P(
-      (aSpace ~ ellipticParam.map((pathCtx.ellipticRel _).tupled).rep(1, sep = commaWsp)) |
-        (ASpace ~ ellipticParam.map((pathCtx.elliptic _).tupled).rep(1, sep = commaWsp))
+    val quad: P[PathFun] = P(
+      ("q" ~/ space ~ twoCoordPairs.rep(1, sep = commaWsp).map(foldPathFun(_)((PathFun.quadRel _).tupled))) |
+        ("Q" ~/ space ~ twoCoordPairs.rep(1, sep = commaWsp).map(foldPathFun(_)((PathFun.quad _).tupled)))
     )
 
-    val cubic: Parser[A] = P(
-      (cSpace ~ threeCoordPairs.map((pathCtx.cubicRel _).tupled).rep(1, sep = commaWsp)) |
-        (CSpace ~ threeCoordPairs.map((pathCtx.cubic _).tupled).rep(1, sep = commaWsp))
+    val ellipticalArc: P[PathFun] = P(
+      ("a" ~/ space ~ ellipticParam.rep(1, sep = commaWsp).map(foldPathFun(_)((PathFun.ellipticRel _).tupled))) |
+        ("A" ~/ space ~ ellipticParam.rep(1, sep = commaWsp).map(foldPathFun(_)((PathFun.elliptic _).tupled)))
     )
 
-    val smoothCubic: Parser[A] = P(
-      (sSpace ~ twoCoordPairs.map((pathCtx.smoothCubicRel _).tupled).rep(1, sep = commaWsp)) |
-        (SSpace ~ twoCoordPairs.map((pathCtx.smoothCubic _).tupled).rep(1, sep = commaWsp))
+    val cubic: P[PathFun] = P(
+      ("c" ~/ space ~ threeCoordPairs.rep(1, sep = commaWsp).map(foldPathFun(_)((PathFun.cubicRel _).tupled))) |
+        ("C" ~/ space ~ threeCoordPairs.rep(1, sep = commaWsp).map(foldPathFun(_)((PathFun.cubic _).tupled)))
     )
 
-    val closePath: Parser[A] = P(CharIn("zZ") map (_ => pathCtx.closePath()))
+    val smoothCubic: P[PathFun] = P(
+      ("s" ~/ space ~ twoCoordPairs.rep(1, sep = commaWsp).map(foldPathFun(_)((PathFun.smoothCubicRel _).tupled))) |
+        ("S" ~/ space ~ twoCoordPairs.rep(1, sep = commaWsp).map(foldPathFun(_)((PathFun.smoothCubic _).tupled)))
+    )
 
-    val command: Parser[A] = P(
+    val closePath: P[PathFun] = P(CharIn("zZ") map (_ => PathFun.closePath))
+
+    val command: P[PathFun] = P(
       closePath | lineTo | horizLineTo | vertLineTo | cubic | smoothCubic | quad | ellipticalArc
     )
 
-    val path: Parser[A] =
-      P(((moveTo ~ space) ~ (command ~ space).rep(pathRepeater))
-        .map((pathCtx.append _).tupled)
-        .rep(1))
+    val path: P[PathFun] =
+      P(
+        ((moveTo ~ space) ~ (command ~ space).rep)
+          .map(x => new PathFun {
+            def apply[A](pathCtx: FinalPath[A]): A =
+              x._2.foldLeft(x._1(pathCtx))((b, t) => pathCtx.append(b, t(pathCtx)))
+          })
+          .rep(1).map(foldPathFunE)
+      )
   }
-
 }
+

@@ -6,28 +6,31 @@ package ast
 import cats.Monoid
 
 trait FastMonoid[S, A] {
-  implicit val monoid: Monoid[A]
+  def append(a1: A, a2: A): A
+
+  def empty: A
+
   // intended to be a monoid homomorphism, up to observation.
   def in(str: S): A
 }
 
 object FastMonoid {
-  implicit def underlyingMonoid[S, A](implicit sm: FastMonoid[S, A]): Monoid[A] =
-    sm.monoid
 
-  final case class Id[A]()(implicit override val monoid: Monoid[A]) extends FastMonoid[A, A] {
+  final case class Id[A]()(implicit val monoid: Monoid[A]) extends FastMonoid[A, A] {
     override def in(a: A): A = a
+    override def append(a1: A, a2: A): A = monoid.combine(a1, a2)
+    override def empty: A = monoid.empty
   }
 
   final case class ToString[A]() extends FastMonoid[A, Vector[String]] {
-    override implicit val monoid: Monoid[Vector[String]] =
-      cats.instances.vector.catsKernelStdMonoidForVector[String]
-
     override def in(a: A): Vector[String] = Vector.empty :+ a.toString
+    override def append(a1: Vector[String], a2: Vector[String]): Vector[String] = a1 ++ a2
+    override def empty: Vector[String] = Vector.empty
   }
 
-  final case class Vec[A]() extends FastMonoid[A, Vector[A]] {
-    override implicit val monoid: Monoid[Vector[A]] = cats.instances.vector.catsKernelStdMonoidForVector[A]
-    override def in(str: A): Vector[A] = Vector.empty :+ str
+  final case class Tq[A]() extends FastMonoid[A, Steque[A]] {
+    override def empty: Steque[A] = Steque.empty
+    override def append(x: Steque[A], y: Steque[A]): Steque[A] = x ++: y
+    override def in(str: A): Steque[A] = Steque.empty :+ str
   }
 }

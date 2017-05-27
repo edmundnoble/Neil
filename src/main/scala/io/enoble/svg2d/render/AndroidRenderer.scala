@@ -2,9 +2,8 @@ package io
 package enoble
 package svg2d.render
 
-import cats.Eval
-import cats.data.{State, StateT}
-import cats.implicits._
+import cats.data.State
+//import cats.implicits._
 import io.enoble.svg2d.ast._
 
 import scala.annotation.tailrec
@@ -31,12 +30,12 @@ object AndroidRenderer {
 
   implicit final class fastMonoidInterpolation(val sc: StringContext) extends AnyVal {
     @inline def fm[A](args: Any*)(implicit fastMonoid: FastMonoid[String, A]): A = {
-      import fastMonoid.monoid
       val partIt = sc.parts.iterator
       val argIt = args.iterator
       var now: A = fastMonoid.in(partIt.next())
       while (partIt.hasNext) {
-        now = now |+| fastMonoid.in(String.valueOf(argIt.next())) |+| fastMonoid.in(partIt.next())
+        now =
+          fastMonoid.append(fastMonoid.append(now, fastMonoid.in(String.valueOf(argIt.next()))), fastMonoid.in(partIt.next()))
       }
       now
     }
@@ -44,18 +43,16 @@ object AndroidRenderer {
 
 }
 
-final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extends FinalSVG[A] {
+final case class AndroidRenderer[A]()(implicit stringyMonoid: FastMonoid[String, A]) extends FinalSVG[A] {
   self =>
-
-  implicit val implicitStringyMonoid = stringyMonoid
 
   import AndroidRenderer._
   import stringyMonoid._
 
-  override val empty: A = monoid.empty
+  override val empty: A = stringyMonoid.empty
 
   override def append(f1: A, f2: A): A = {
-    monoid.combine(f1, f2)
+    stringyMonoid.append(f1, f2)
   }
 
   override def circle(x: Double, y: Double, r: Double): A =
@@ -77,7 +74,7 @@ final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extend
     outputLine(fm"c.drawText(${"\""}$text${"\""}, $x, $y, p);")
 
   @tailrec
-  private def indent(a: A, level: Int = 0): A =
+  private def indent(a: A, level: Int): A =
     if (level <= 0) a
     else indent(
       append(in("    "), a),
@@ -102,14 +99,14 @@ final case class AndroidRenderer[A](stringyMonoid: FastMonoid[String, A]) extend
         State { state =>
           val newState = stateChange(state)
           (newState,
-            indent(code(newState), level = newState.indentation) |+| in("\n")
+            self.append(indent(code(newState), level = newState.indentation), in("\n"))
           )
         }
 
       override def append(fst: Paths, snd: Paths): Paths =
-        StateT.catsDataMonadForStateT[Eval, PathState].map2(fst, snd)(self.append)
+        fst.flatMap(f => snd.map(s => self.append(f, s)))
 
-      override def closePath(): Paths =
+      override val closePath: Paths =
         State[PathState, A](state => (state, outputLine(in("path.close();"), state.indentation)))
 
       override def moveTo(x: Double, y: Double): Paths =

@@ -4,10 +4,8 @@ package svg2d
 package xmlparse
 
 import io.enoble.svg2d.ast.FinalSVG
-import io.enoble.svg2d.utils.Named.Named
 
-import scala.xml.{Elem, MetaData}
-
+import scala.xml.MetaData
 
 object Text extends TerminalModel {
   override val label: String = "text"

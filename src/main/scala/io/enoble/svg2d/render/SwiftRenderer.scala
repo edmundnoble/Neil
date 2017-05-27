@@ -8,9 +8,9 @@ import shapeless.HNil
 
 final case class SwiftRenderer[A](stringyMonoid: FastMonoid[String, A]) extends FinalSVG[A]  {
   override type Paths = HNil
-  override val empty = stringyMonoid.monoid.empty
+  override val empty = stringyMonoid.empty
   override def append(f1: A, f2: A): A =
-    stringyMonoid.monoid.combine(f1, f2)
+    stringyMonoid.append(f1, f2)
   override def circle(x: Double, y: Double, r: Double) = empty
   override def ellipse(x: Double, y: Double, rx: Double, ry: Double) = empty
   override def text(text: String, x: Double, y: Double) = empty

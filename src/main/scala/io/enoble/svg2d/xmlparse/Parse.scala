@@ -7,7 +7,6 @@ import cats.Eval
 import cats.implicits._
 import io.enoble.svg2d.ast.FinalSVG
 
-import scala.language.higherKinds
 import scala.xml.Elem
 
 object Parse {

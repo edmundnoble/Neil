@@ -8,7 +8,7 @@ object InitialPathRenderer extends FinalPath[Vector[InitialPath]] {
 
   override def append(fst: Vector[InitialPath], snd: Vector[InitialPath]): Vector[InitialPath] = fst ++ snd
 
-  override def closePath() = Vector(ClosePath)
+  override val closePath = Vector(ClosePath)
 
   override def moveTo(x: Double, y: Double): Vector[InitialPath] =
     Vector(MoveTo(x, y))

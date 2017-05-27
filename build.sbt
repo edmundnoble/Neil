@@ -1,19 +1,18 @@
 name in ThisBuild := "neil"
 
-scalaVersion in ThisBuild := "2.12.1"
-
-scalaOrganization in ThisBuild := "org.typelevel"
+scalaVersion in ThisBuild := "2.12.2"
 
 version in ThisBuild := "0.0.2"
 
 scalacOptions ++= Seq(
   "-Xlint",
+  "-opt:l:classpath",
   "-Ypartial-unification",
-  "-Yliteral-types",
   "-feature",
   "-deprecation",
   "-unchecked",
   "-language:higherKinds",
+  "-language:implicitConversions",
   "-Xfatal-warnings"
 )
 
@@ -29,7 +28,7 @@ libraryDependencies += "org.scalatest" %% "scalatest" % "3.0.1" % "test"
 
 libraryDependencies += "org.scala-lang.modules" %% "scala-xml" % "1.0.6"
 
-libraryDependencies += "com.lihaoyi" %% "fastparse" % "0.4.2"
+libraryDependencies += "com.lihaoyi" %% "fastparse" % "0.4.3"
 
 libraryDependencies += "com.github.alexarchambault" %% "case-app" % "1.2.0-M1"
 
@@ -39,9 +38,12 @@ mainClass in assembly := Some("io.enoble.svg2d.Main")
 
 resolvers += Resolver.sonatypeRepo("public")
 
-// the micro-optimizations are REAL
-javaOptions ++= Seq("-XX:+TieredCompilation", "-XX:CompileThreshold=1")
+javaOptions in run ++=
+  Seq("-Xmx1g", "-Xms1g")
+
+val timeTask: TaskKey[Unit] = TaskKey("time")
+timeTask := { (run in Compile).toTask(" -a android -i svg --timed overall:300").value }
 
 fork in test := true
+fork in (run in Compile) := true
 
-fork in run := true

@@ -6,7 +6,7 @@ package xmlparse
 
 import io.enoble.svg2d.ast.FinalSVG
 
-import scala.xml.{Elem, MetaData}
+import scala.xml.MetaData
 
 object Circle extends Model {
   override val label: String = "circle"
